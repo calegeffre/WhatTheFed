@@ -10,6 +10,10 @@ Minimal retrieval-augmented analysis for FED meetings and trusted macro signals.
 - Predicts the next FED move (`raise`, `hold`, or `cut`) from retrieved evidence
 - Exposes dashboard-friendly data for a static HTML meeting page
 
+## Architecture
+
+![Architecture diagram](assets/architecturediagram.png)
+
 ## Quick usage
 
 ```python
