@@ -49,6 +49,13 @@ class FedRAGAnalyzerTests(unittest.TestCase):
         self.assertGreaterEqual(prediction["confidence"], 0.33)
         self.assertIn("hawkish", prediction["rationale"])
 
+    def test_analyze_returns_dashboard_ready_data(self) -> None:
+        report = self.analyzer.analyze(self.meeting_notes, self.trusted_signals)
+        self.assertEqual(report["last_meeting_label"], "June 2026 Meeting")
+        self.assertEqual(len(report["dashboard"]["last_meeting_votes"]), 12)
+        self.assertEqual(len(report["dashboard"]["next_meeting_heat_map"]), 4)
+        self.assertEqual(report["dashboard"]["last_meeting_votes"][0]["member"], "Member 01")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@ Minimal retrieval-augmented analysis for FED meetings and trusted macro signals.
 - Retrieves the most relevant evidence for a summary/prediction request
 - Summarizes the latest meeting note
 - Predicts the next FED move (`raise`, `hold`, or `cut`) from retrieved evidence
+- Exposes dashboard-friendly data for a static HTML meeting page
 
 ## Quick usage
 
@@ -32,4 +33,15 @@ analyzer = FedRAGAnalyzer()
 report = analyzer.analyze(meeting_notes=meeting_notes, trusted_signals=trusted_signals)
 print(report["last_meeting_summary"])
 print(report["next_meeting_prediction"])
+print(report["dashboard"]["next_meeting_heat_map"])
 ```
+
+## Dashboard
+
+Open `/home/runner/work/WhatTheFed/WhatTheFed/index.html` in a browser to view a static dashboard prototype with:
+
+- a next-meeting heat map
+- a latest-meeting summary card
+- 12 generic voter cards for the last meeting
+
+The page is wired to the same top-level data shape returned by `FedRAGAnalyzer.analyze(...)`, so the inline demo payload can later be replaced with serialized RAG output.

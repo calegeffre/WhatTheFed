@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatTheFed Dashboard</title>
+  <style>
+    :root {
+      --bg: #08111f;
+      --panel: #101c2e;
+      --panel-border: #203250;
+      --text: #eef4ff;
+      --muted: #93a3bd;
+      --hot: #ff6b6b;
+      --warm: #f7b267;
+      --balanced: #66c7f4;
+      --cool: #7bd389;
+      --cold: #4ecdc4;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: radial-gradient(circle at top, #13243d, var(--bg) 65%);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    .hero,
+    .section {
+      background: rgba(16, 28, 46, 0.92);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.2);
+    }
+
+    .hero {
+      display: grid;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      color: #8dc8ff;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .hero-grid,
+    .meeting-grid {
+      display: grid;
+      gap: 20px;
+    }
+
+    .hero-grid {
+      grid-template-columns: 1.2fr 1fr;
+      align-items: start;
+    }
+
+    .prediction-card {
+      padding: 18px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(141, 200, 255, 0.14), rgba(255, 255, 255, 0.04));
+      border: 1px solid rgba(141, 200, 255, 0.2);
+      margin-top: 18px;
+    }
+
+    .prediction-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .pill,
+    .source-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .pill {
+      background: rgba(247, 178, 103, 0.18);
+      color: #ffd6a5;
+      border: 1px solid rgba(247, 178, 103, 0.3);
+    }
+
+    .source-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .source-pill {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .heat-map {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .heat-cell {
+      border-radius: 18px;
+      padding: 16px;
+      min-height: 148px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .heat-score {
+      font-size: 32px;
+      font-weight: bold;
+    }
+
+    .heat-hot { background: rgba(255, 107, 107, 0.18); }
+    .heat-warm { background: rgba(247, 178, 103, 0.16); }
+    .heat-balanced { background: rgba(102, 199, 244, 0.16); }
+    .heat-cool { background: rgba(123, 211, 137, 0.16); }
+    .heat-cold { background: rgba(78, 205, 196, 0.16); }
+
+    .section {
+      margin-top: 24px;
+    }
+
+    .meeting-grid {
+      grid-template-columns: 1fr auto;
+      margin-top: 20px;
+    }
+
+    .votes-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 14px;
+    }
+
+    .voter-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .avatar {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 12px;
+      position: relative;
+    }
+
+    .avatar::before,
+    .avatar::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(180deg, #f5d7b0, #d1a980);
+    }
+
+    .avatar::before {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      top: 0;
+    }
+
+    .avatar::after {
+      width: 42px;
+      height: 24px;
+      border-radius: 18px 18px 10px 10px;
+      bottom: 0;
+    }
+
+    .vote-tag {
+      margin-top: 10px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      display: inline-block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .vote-raise { background: rgba(255, 107, 107, 0.22); color: #ffd0d0; }
+    .vote-hold { background: rgba(102, 199, 244, 0.22); color: #d6f2ff; }
+    .vote-cut { background: rgba(123, 211, 137, 0.22); color: #dff8e5; }
+
+    .note {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 920px) {
+      .hero-grid,
+      .meeting-grid,
+      .heat-map {
+        grid-template-columns: 1fr;
+      }
+      .votes-grid {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">WhatTheFed</div>
+      <div class="hero-grid">
+        <div>
+          <h1>Next Meeting Heat Map</h1>
+          <p id="summary" class="note"></p>
+          <div class="prediction-card">
+            <div class="prediction-row">
+              <h2 id="prediction-title"></h2>
+              <span id="confidence" class="pill"></span>
+            </div>
+            <p id="rationale" class="note"></p>
+            <div id="sources" class="source-list"></div>
+          </div>
+        </div>
+        <div id="heat-map" class="heat-map"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">Last Meeting</div>
+      <h2 id="meeting-label"></h2>
+      <div class="meeting-grid">
+        <div>
+          <p id="meeting-summary" class="note"></p>
+          <p class="note">The generic voter cards are placeholders for future FOMC voting metadata.</p>
+        </div>
+        <div class="pill">12 generic voters</div>
+      </div>
+      <div id="votes-grid" class="votes-grid" style="margin-top: 20px;"></div>
+    </section>
+  </main>
+
+  <script>
+    const dashboardData = {
+      last_meeting_label: "June 2026 Meeting",
+      last_meeting_summary:
+        "The committee held rates unchanged. Members emphasized persistent inflation and resilient labor conditions.",
+      next_meeting_prediction: {
+        decision: "raise",
+        confidence: 0.9,
+        rationale: "fomc_2026_06: hawkish=2, dovish=0; jobs: hawkish=1, dovish=0; cpi: hawkish=1, dovish=0",
+      },
+      evidence_sources: ["fomc_2026_06", "jobs", "cpi", "gdp"],
+      dashboard: {
+        next_meeting_heat_map: [
+          { label: "Inflation Pressure", score: 5, tone: "hot", sources: ["fomc_2026_06", "cpi"] },
+          { label: "Labor Strength", score: 5, tone: "hot", sources: ["fomc_2026_06", "jobs"] },
+          { label: "Growth Momentum", score: 2, tone: "cool", sources: ["jobs", "gdp"] },
+          { label: "Policy Bias", score: 4, tone: "warm", sources: ["fomc_2026_06", "cpi", "jobs"] },
+        ],
+        last_meeting_votes: [
+          { member: "Member 01", vote: "hold" },
+          { member: "Member 02", vote: "hold" },
+          { member: "Member 03", vote: "hold" },
+          { member: "Member 04", vote: "hold" },
+          { member: "Member 05", vote: "hold" },
+          { member: "Member 06", vote: "hold" },
+          { member: "Member 07", vote: "hold" },
+          { member: "Member 08", vote: "hold" },
+          { member: "Member 09", vote: "raise" },
+          { member: "Member 10", vote: "raise" },
+          { member: "Member 11", vote: "cut" },
+          { member: "Member 12", vote: "cut" },
+        ],
+      },
+    };
+
+    document.getElementById("meeting-label").textContent = dashboardData.last_meeting_label;
+    document.getElementById("meeting-summary").textContent = dashboardData.last_meeting_summary;
+    document.getElementById("summary").textContent =
+      "This dashboard is wired to the same data shape returned by the Python RAG analyzer, so the heat map can be replaced later with serialized live output.";
+    document.getElementById("prediction-title").textContent =
+      `Predicted next move: ${dashboardData.next_meeting_prediction.decision.toUpperCase()}`;
+    document.getElementById("confidence").textContent =
+      `${Math.round(dashboardData.next_meeting_prediction.confidence * 100)}% confidence`;
+    document.getElementById("rationale").textContent = dashboardData.next_meeting_prediction.rationale;
+
+    const sources = document.getElementById("sources");
+    dashboardData.evidence_sources.forEach((source) => {
+      const pill = document.createElement("span");
+      pill.className = "source-pill";
+      pill.textContent = source;
+      sources.appendChild(pill);
+    });
+
+    const heatMap = document.getElementById("heat-map");
+    dashboardData.dashboard.next_meeting_heat_map.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = `heat-cell heat-${item.tone}`;
+      card.innerHTML = `
+        <div class="eyebrow">${item.label}</div>
+        <div class="heat-score">${item.score}/5</div>
+        <div>${item.tone}</div>
+        <div class="source-list">${item.sources.map((source) => `<span class="source-pill">${source}</span>`).join("")}</div>
+      `;
+      heatMap.appendChild(card);
+    });
+
+    const votesGrid = document.getElementById("votes-grid");
+    dashboardData.dashboard.last_meeting_votes.forEach((voter) => {
+      const card = document.createElement("article");
+      card.className = "voter-card";
+      card.innerHTML = `
+        <div class="avatar" aria-hidden="true"></div>
+        <h3>${voter.member}</h3>
+        <div class="vote-tag vote-${voter.vote}">${voter.vote}</div>
+      `;
+      votesGrid.appendChild(card);
+    });
+  </script>
+</body>
+</html>

@@ -42,11 +42,18 @@ def _cosine_similarity(left: Counter[str], right: Counter[str]) -> float:
 class FedRAGAnalyzer:
     HAWKISH_TERMS = ("inflation", "overheat", "tight", "resilient", "strong labor")
     DOVISH_TERMS = ("disinflation", "slowdown", "recession", "weak", "softening")
+    HEAT_MAP_SIGNALS = (
+        ("Inflation Pressure", ("inflation", "tight"), ("disinflation",)),
+        ("Labor Strength", ("resilient", "strong labor", "hiring"), ("weak", "softening")),
+        ("Growth Momentum", ("growth", "resilient"), ("slowdown", "recession", "softening")),
+        ("Policy Bias", ("tight", "inflation", "resilient"), ("disinflation", "recession", "weak")),
+    )
     RAISE_THRESHOLD = 2
     CUT_THRESHOLD = -2
     BASE_CONFIDENCE = 0.45
     SCORE_MULTIPLIER = 0.1
     MAX_CONFIDENCE = 0.9
+    GENERIC_VOTER_COUNT = 12
 
     def __init__(self, top_k: int = 5) -> None:
         self.top_k = top_k
@@ -119,13 +126,20 @@ class FedRAGAnalyzer:
             documents=all_docs,
         )
 
+        latest_meeting = self._latest_meeting(meeting_notes)
         summary = self.summarize_last_meeting(meeting_notes)
         prediction = self.predict_next_meeting(evidence)
+        last_meeting_decision = self._infer_decision(summary)
 
         return {
+            "last_meeting_label": self._meeting_label(latest_meeting),
             "last_meeting_summary": summary,
             "next_meeting_prediction": prediction,
             "evidence_sources": [doc.source for doc in evidence],
+            "dashboard": {
+                "next_meeting_heat_map": self._build_heat_map(evidence),
+                "last_meeting_votes": self._build_member_votes(last_meeting_decision),
+            },
         }
 
     @staticmethod
@@ -136,3 +150,72 @@ class FedRAGAnalyzer:
             except ValueError:
                 pass
         return datetime.min
+
+    def _latest_meeting(self, meeting_notes: list[Document]) -> Document:
+        return max(meeting_notes, key=self._meeting_sort_key)
+
+    def _meeting_label(self, doc: Document) -> str:
+        if doc.meeting_date:
+            try:
+                return f"{datetime.fromisoformat(doc.meeting_date):%B %Y} Meeting"
+            except ValueError:
+                pass
+        return f"{doc.source.replace('_', ' ').title()} Meeting"
+
+    def _infer_decision(self, text: str) -> str:
+        lowered = text.lower()
+        if any(word in lowered for word in ("raise", "raised", "hike", "increase")):
+            return "raise"
+        if any(word in lowered for word in ("cut", "reduced", "lowered")):
+            return "cut"
+        return "hold"
+
+    def _build_heat_map(self, evidence_docs: list[Document]) -> list[dict[str, object]]:
+        cards: list[dict[str, object]] = []
+        for label, hawkish_terms, dovish_terms in self.HEAT_MAP_SIGNALS:
+            raw_score = 0
+            matching_sources: list[str] = []
+            for doc in evidence_docs:
+                text = doc.content.lower()
+                hawkish_hits = sum(text.count(term) for term in hawkish_terms)
+                dovish_hits = sum(text.count(term) for term in dovish_terms)
+                if hawkish_hits or dovish_hits:
+                    matching_sources.append(doc.source)
+                raw_score += hawkish_hits - dovish_hits
+            heat_score = max(1, min(5, 3 + raw_score))
+            cards.append(
+                {
+                    "label": label,
+                    "score": heat_score,
+                    "tone": self._heat_map_tone(heat_score),
+                    "sources": matching_sources[:3],
+                }
+            )
+        return cards
+
+    def _build_member_votes(self, last_meeting_decision: str) -> list[dict[str, str]]:
+        distributions = {
+            "raise": ["raise"] * 8 + ["hold"] * 3 + ["cut"],
+            "hold": ["hold"] * 8 + ["raise"] * 2 + ["cut"] * 2,
+            "cut": ["cut"] * 8 + ["hold"] * 3 + ["raise"],
+        }
+        votes = distributions.get(last_meeting_decision, distributions["hold"])
+        return [
+            {
+                "member": f"Member {index + 1:02d}",
+                "vote": votes[index],
+            }
+            for index in range(self.GENERIC_VOTER_COUNT)
+        ]
+
+    @staticmethod
+    def _heat_map_tone(score: int) -> str:
+        if score >= 5:
+            return "hot"
+        if score == 4:
+            return "warm"
+        if score == 3:
+            return "balanced"
+        if score == 2:
+            return "cool"
+        return "cold"
