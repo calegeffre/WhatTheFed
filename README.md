@@ -45,3 +45,5 @@ Open `/home/runner/work/WhatTheFed/WhatTheFed/index.html` in a browser to view a
 - 12 generic voter cards for the last meeting
 
 The page is wired to the same top-level data shape returned by `FedRAGAnalyzer.analyze(...)`, so the inline demo payload can later be replaced with serialized RAG output.
+
+![Dashboard preview](assets/dashboard-preview.png)
