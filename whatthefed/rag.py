@@ -40,6 +40,14 @@ def _cosine_similarity(left: Counter[str], right: Counter[str]) -> float:
 
 
 class FedRAGAnalyzer:
+    HAWKISH_TERMS = ("inflation", "overheat", "tight", "resilient", "strong labor")
+    DOVISH_TERMS = ("disinflation", "slowdown", "recession", "weak", "softening")
+    RAISE_THRESHOLD = 2
+    CUT_THRESHOLD = -2
+    BASE_CONFIDENCE = 0.45
+    SCORE_MULTIPLIER = 0.1
+    MAX_CONFIDENCE = 0.9
+
     def __init__(self, top_k: int = 5) -> None:
         self.top_k = top_k
 
@@ -72,25 +80,20 @@ class FedRAGAnalyzer:
         rationale_fragments: list[str] = []
         for doc in evidence_docs:
             text = doc.content.lower()
-            hawkish_hits = sum(
-                text.count(word)
-                for word in ("inflation", "overheat", "tight", "resilient", "strong labor")
-            )
-            dovish_hits = sum(
-                text.count(word) for word in ("disinflation", "slowdown", "recession", "weak", "softening")
-            )
+            hawkish_hits = sum(text.count(word) for word in self.HAWKISH_TERMS)
+            dovish_hits = sum(text.count(word) for word in self.DOVISH_TERMS)
             delta = hawkish_hits - dovish_hits
             score += delta
             rationale_fragments.append(f"{doc.source}: hawkish={hawkish_hits}, dovish={dovish_hits}")
 
-        if score >= 2:
+        if score >= self.RAISE_THRESHOLD:
             decision = "raise"
-        elif score <= -2:
+        elif score <= self.CUT_THRESHOLD:
             decision = "cut"
         else:
             decision = "hold"
 
-        confidence = min(0.9, 0.45 + (abs(score) * 0.1))
+        confidence = min(self.MAX_CONFIDENCE, self.BASE_CONFIDENCE + (abs(score) * self.SCORE_MULTIPLIER))
         return {
             "decision": decision,
             "confidence": round(confidence, 2),
