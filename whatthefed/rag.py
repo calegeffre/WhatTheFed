@@ -54,6 +54,11 @@ class FedRAGAnalyzer:
     SCORE_MULTIPLIER = 0.1
     MAX_CONFIDENCE = 0.9
     GENERIC_VOTER_COUNT = 12
+    LAST_MEETING_VOTE_DISTRIBUTIONS = {
+        "raise": ["raise"] * 8 + ["hold"] * 3 + ["cut"],
+        "hold": ["hold"] * 8 + ["raise"] * 2 + ["cut"] * 2,
+        "cut": ["cut"] * 8 + ["hold"] * 3 + ["raise"],
+    }
 
     def __init__(self, top_k: int = 5) -> None:
         self.top_k = top_k
@@ -133,6 +138,7 @@ class FedRAGAnalyzer:
 
         return {
             "last_meeting_label": self._meeting_label(latest_meeting),
+            "last_meeting_decision": last_meeting_decision,
             "last_meeting_summary": summary,
             "next_meeting_prediction": prediction,
             "evidence_sources": [doc.source for doc in evidence],
@@ -194,12 +200,10 @@ class FedRAGAnalyzer:
         return cards
 
     def _build_member_votes(self, last_meeting_decision: str) -> list[dict[str, str]]:
-        distributions = {
-            "raise": ["raise"] * 8 + ["hold"] * 3 + ["cut"],
-            "hold": ["hold"] * 8 + ["raise"] * 2 + ["cut"] * 2,
-            "cut": ["cut"] * 8 + ["hold"] * 3 + ["raise"],
-        }
-        votes = distributions.get(last_meeting_decision, distributions["hold"])
+        votes = self.LAST_MEETING_VOTE_DISTRIBUTIONS.get(
+            last_meeting_decision,
+            self.LAST_MEETING_VOTE_DISTRIBUTIONS["hold"],
+        )
         return [
             {
                 "member": f"Member {index + 1:02d}",

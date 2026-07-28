@@ -38,7 +38,7 @@ print(report["dashboard"]["next_meeting_heat_map"])
 
 ## Dashboard
 
-Open `/home/runner/work/WhatTheFed/WhatTheFed/index.html` in a browser to view a static dashboard prototype with:
+Open `./index.html` in a browser to view a static dashboard prototype with:
 
 - a next-meeting heat map
 - a latest-meeting summary card

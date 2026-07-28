@@ -148,6 +148,14 @@
       margin-top: 20px;
     }
 
+    .meeting-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
     .votes-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(120px, 1fr));
@@ -249,10 +257,13 @@
     <section class="section">
       <div class="eyebrow">Last Meeting</div>
       <h2 id="meeting-label"></h2>
+      <div class="meeting-meta">
+        <div id="meeting-decision" class="pill"></div>
+      </div>
       <div class="meeting-grid">
         <div>
           <p id="meeting-summary" class="note"></p>
-          <p class="note">The generic voter cards are placeholders for future FOMC voting metadata.</p>
+          <p class="note">The generic voter cards reflect the last meeting vote pattern, so they may differ from the next meeting prediction above.</p>
         </div>
         <div class="pill">12 generic voters</div>
       </div>
@@ -263,6 +274,7 @@
   <script>
     const dashboardData = {
       last_meeting_label: "June 2026 Meeting",
+      last_meeting_decision: "hold",
       last_meeting_summary:
         "The committee held rates unchanged. Members emphasized persistent inflation and resilient labor conditions.",
       next_meeting_prediction: {
@@ -296,6 +308,8 @@
     };
 
     document.getElementById("meeting-label").textContent = dashboardData.last_meeting_label;
+    document.getElementById("meeting-decision").textContent =
+      `Last meeting vote: ${dashboardData.last_meeting_decision.toUpperCase()}`;
     document.getElementById("meeting-summary").textContent = dashboardData.last_meeting_summary;
     document.getElementById("summary").textContent =
       "This dashboard is wired to the same data shape returned by the Python RAG analyzer, so the heat map can be replaced later with serialized live output.";

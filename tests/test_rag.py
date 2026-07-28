@@ -52,6 +52,7 @@ class FedRAGAnalyzerTests(unittest.TestCase):
     def test_analyze_returns_dashboard_ready_data(self) -> None:
         report = self.analyzer.analyze(self.meeting_notes, self.trusted_signals)
         self.assertEqual(report["last_meeting_label"], "June 2026 Meeting")
+        self.assertEqual(report["last_meeting_decision"], "hold")
         self.assertEqual(len(report["dashboard"]["last_meeting_votes"]), 12)
         self.assertEqual(len(report["dashboard"]["next_meeting_heat_map"]), 4)
         self.assertEqual(report["dashboard"]["last_meeting_votes"][0]["member"], "Member 01")
