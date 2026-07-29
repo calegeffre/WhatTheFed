@@ -371,13 +371,15 @@
       }
     }
 
-    .year-tabs {
+    .year-tabs,
+    .viz-tabs {
       display: flex;
       gap: 8px;
       margin: 16px 0;
     }
 
-    .year-tab {
+    .year-tab,
+    .viz-tab {
       padding: 8px 20px;
       border-radius: 999px;
       border: 1px solid rgba(141, 200, 255, 0.2);
@@ -389,17 +391,28 @@
       transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
     }
 
-    .year-tab:hover {
+    .year-tab:hover,
+    .viz-tab:hover {
       background: rgba(141, 200, 255, 0.1);
       color: var(--text);
       border-color: rgba(141, 200, 255, 0.35);
     }
 
-    .year-tab.year-tab-active {
+    .year-tab.year-tab-active,
+    .viz-tab.viz-tab-active {
       background: rgba(141, 200, 255, 0.18);
       color: #8dc8ff;
       border-color: rgba(141, 200, 255, 0.5);
       font-weight: 600;
+    }
+
+    .viz-panel { display: none; }
+    .viz-panel.viz-panel-active { display: block; }
+    .viz-chart {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(141, 200, 255, 0.1);
+      border-radius: 12px;
     }
   </style>
 </head>
@@ -421,6 +434,20 @@
           </div>
         </div>
         <div id="heat-map" class="heat-map"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">Data Visualization</div>
+      <div class="viz-tabs">
+        <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
+        <button class="viz-tab" data-viz="knowledge-graph">Signal Knowledge Graph</button>
+      </div>
+      <div id="viz-panel-rate-timeline" class="viz-panel viz-panel-active">
+        <svg id="rate-chart" class="viz-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div id="viz-panel-knowledge-graph" class="viz-panel">
+        <svg id="kg-chart" class="viz-chart" viewBox="0 0 600 370" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
     </section>
 
@@ -795,6 +822,204 @@
 
     renderTabs();
     renderTimeline();
+
+    // ── Data Visualization ──────────────────────────────────────────
+    const VIZ_NS = "http://www.w3.org/2000/svg";
+
+    function svgEl(tag, attrs, text) {
+      const e = document.createElementNS(VIZ_NS, tag);
+      Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, String(v)));
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    // Rate history: [date, lower-bound %, upper-bound %, decision]
+    const RATE_HISTORY = [
+      ["2023-09-20", 5.25, 5.50, "hold"],
+      ["2023-11-01", 5.25, 5.50, "hold"],
+      ["2023-12-13", 5.25, 5.50, "hold"],
+      ["2024-01-31", 5.25, 5.50, "hold"],
+      ["2024-03-20", 5.25, 5.50, "hold"],
+      ["2024-05-01", 5.25, 5.50, "hold"],
+      ["2024-06-12", 5.25, 5.50, "hold"],
+      ["2024-07-31", 5.25, 5.50, "hold"],
+      ["2024-09-18", 4.75, 5.00, "cut"],
+      ["2024-11-07", 4.50, 4.75, "cut"],
+      ["2024-12-18", 4.25, 4.50, "cut"],
+      ["2025-01-29", 4.25, 4.50, "hold"],
+      ["2025-03-19", 4.25, 4.50, "hold"],
+      ["2025-05-07", 4.25, 4.50, "hold"],
+      ["2025-06-18", 4.25, 4.50, "hold"],
+      ["2025-07-30", 4.25, 4.50, "hold"],
+      ["2025-09-17", 4.00, 4.25, "cut"],
+      ["2025-10-29", 3.75, 4.00, "cut"],
+      ["2025-12-10", 3.50, 3.75, "cut"],
+      ["2026-01-28", 3.50, 3.75, "hold"],
+      ["2026-03-18", 3.50, 3.75, "hold"],
+      ["2026-04-29", 3.50, 3.75, "hold"],
+      ["2026-06-17", 3.50, 3.75, "hold"],
+    ];
+
+    function drawRateTimeline() {
+      const svg = document.getElementById("rate-chart");
+      if (!svg) return;
+      svg.innerHTML = "";
+
+      const VW = 800, VH = 260;
+      const P = { t: 22, r: 24, b: 50, l: 54 };
+      const CW = VW - P.l - P.r, CH = VH - P.t - P.b;
+      const minT = new Date(RATE_HISTORY[0][0]).getTime();
+      const maxT = new Date("2026-10-01").getTime();
+      const minR = 3.0, maxR = 5.75;
+
+      const xS = (d) => P.l + ((new Date(d).getTime() - minT) / (maxT - minT)) * CW;
+      const yS = (r) => P.t + ((maxR - r) / (maxR - minR)) * CH;
+
+      // Horizontal grid lines + Y-axis labels
+      [3.5, 4.0, 4.5, 5.0, 5.5].forEach((r) => {
+        svg.appendChild(svgEl("line", { x1: P.l, y1: yS(r), x2: P.l + CW, y2: yS(r), stroke: "rgba(141,200,255,0.08)", "stroke-width": 1 }));
+        svg.appendChild(svgEl("text", { x: P.l - 6, y: yS(r) + 4, "text-anchor": "end", fill: "rgba(200,210,225,0.45)", "font-size": 10 }, r.toFixed(2) + "%"));
+      });
+
+      // Build upper step path then polygon with lower path reversed (rate band fill)
+      const xEnd = xS("2026-10-01");
+      let upper = `M ${xS(RATE_HISTORY[0][0])},${yS(RATE_HISTORY[0][2])}`;
+      for (let i = 1; i < RATE_HISTORY.length; i++) upper += ` H ${xS(RATE_HISTORY[i][0])} V ${yS(RATE_HISTORY[i][2])}`;
+      upper += ` H ${xEnd}`;
+
+      let lowerRev = ` V ${yS(RATE_HISTORY.at(-1)[1])} H ${xS(RATE_HISTORY.at(-1)[0])}`;
+      for (let i = RATE_HISTORY.length - 2; i >= 0; i--) lowerRev += ` V ${yS(RATE_HISTORY[i][1])} H ${xS(RATE_HISTORY[i][0])}`;
+      lowerRev += " Z";
+
+      svg.appendChild(svgEl("path", { d: upper + lowerRev, fill: "rgba(141,200,255,0.09)", stroke: "none" }));
+      svg.appendChild(svgEl("path", { d: upper, fill: "none", stroke: "#8dc8ff", "stroke-width": 2 }));
+
+      let lower = `M ${xS(RATE_HISTORY[0][0])},${yS(RATE_HISTORY[0][1])}`;
+      for (let i = 1; i < RATE_HISTORY.length; i++) lower += ` H ${xS(RATE_HISTORY[i][0])} V ${yS(RATE_HISTORY[i][1])}`;
+      lower += ` H ${xEnd}`;
+      svg.appendChild(svgEl("path", { d: lower, fill: "none", stroke: "rgba(141,200,255,0.35)", "stroke-width": 1.5, "stroke-dasharray": "3 3" }));
+
+      // Decision dots
+      const DOT_COLOR = { hold: "#8b949e", cut: "#58a6ff", raise: "#ff7b72" };
+      RATE_HISTORY.forEach(([d, , hi, dec]) => {
+        svg.appendChild(svgEl("circle", { cx: xS(d), cy: yS(hi), r: 4.5, fill: DOT_COLOR[dec] || "#8dc8ff", stroke: "#0d1117", "stroke-width": 1.5 }));
+      });
+
+      // Year divider lines + labels
+      ["2024", "2025", "2026"].forEach((y) => {
+        const xPos = xS(y + "-01-01");
+        svg.appendChild(svgEl("line", { x1: xPos, y1: P.t, x2: xPos, y2: P.t + CH, stroke: "rgba(141,200,255,0.1)", "stroke-width": 1, "stroke-dasharray": "4 4" }));
+        svg.appendChild(svgEl("text", { x: xPos, y: P.t + CH + 16, "text-anchor": "middle", fill: "rgba(200,210,225,0.5)", "font-size": 11 }, y));
+      });
+
+      // Chart border + legend
+      svg.appendChild(svgEl("rect", { x: P.l, y: P.t, width: CW, height: CH, fill: "none", stroke: "rgba(141,200,255,0.12)", "stroke-width": 1 }));
+      [["#8b949e", "Hold"], ["#58a6ff", "Cut"], ["#ff7b72", "Raise"]].forEach(([color, label], i) => {
+        const lx = P.l + i * 72, ly = P.t + CH + 40;
+        svg.appendChild(svgEl("circle", { cx: lx + 5, cy: ly - 3, r: 4, fill: color }));
+        svg.appendChild(svgEl("text", { x: lx + 13, y: ly, fill: "rgba(200,210,225,0.5)", "font-size": 10 }, label));
+      });
+      svg.appendChild(svgEl("text", { x: -(P.t + CH / 2), y: 13, transform: "rotate(-90)", "text-anchor": "middle", fill: "rgba(200,210,225,0.35)", "font-size": 10 }, "Fed Funds Rate"));
+    }
+
+    function drawKnowledgeGraph() {
+      const svg = document.getElementById("kg-chart");
+      if (!svg) return;
+      svg.innerHTML = "";
+
+      const TONE_COLOR = { hot: "#ff7b72", warm: "#ffa657", balanced: "#8dc8ff", cool: "#79c0ff", cold: "#58a6ff" };
+      const fomcData = window.__FOMC_DASHBOARD_DATA__;
+      const mktData = window.__MARKET_DASHBOARD_DATA__;
+
+      const signals = fomcData?.signals ?? dashboardData.dashboard.next_meeting_heat_map.map((c) => ({
+        label: c.label, score: c.score, tone: c.tone, mentions: 0,
+      }));
+      const meetingLabel = fomcData?.meeting_label ?? "FOMC Statement";
+      const meetingDate = fomcData?.meeting_date ?? "";
+
+      // ── FOMC cluster ────────────────────────────────────────────
+      svg.appendChild(svgEl("text", { x: 8, y: 14, fill: "rgba(200,210,225,0.35)", "font-size": 8.5, "font-weight": 700, "letter-spacing": "0.09em" }, "FOMC SIGNALS"));
+
+      const SRC_X = 52, SRC_Y = 108;
+      const SIG_X = 240, BAR_X = 278, BAR_W = 180;
+      const sigStep = 168 / Math.max(1, signals.length - 1);
+
+      svg.appendChild(svgEl("circle", { cx: SRC_X, cy: SRC_Y, r: 34, fill: "rgba(141,200,255,0.12)", stroke: "#8dc8ff", "stroke-width": 1.5 }));
+      svg.appendChild(svgEl("text", { x: SRC_X, y: SRC_Y - 10, "text-anchor": "middle", fill: "#8dc8ff", "font-size": 8.5, "font-weight": 600 }, meetingLabel));
+      svg.appendChild(svgEl("text", { x: SRC_X, y: SRC_Y + 4, "text-anchor": "middle", fill: "rgba(200,210,225,0.4)", "font-size": 8 }, meetingDate));
+      svg.appendChild(svgEl("text", { x: SRC_X, y: SRC_Y + 17, "text-anchor": "middle", fill: "rgba(200,210,225,0.25)", "font-size": 7.5 }, "Statement"));
+
+      signals.forEach((sig, i) => {
+        const sy = 24 + i * sigStep;
+        const color = TONE_COLOR[sig.tone] ?? "#8dc8ff";
+        const mx = (SRC_X + 34 + SIG_X - 26) / 2, my = (SRC_Y + sy) / 2;
+        svg.appendChild(svgEl("line", { x1: SRC_X + 34, y1: SRC_Y, x2: SIG_X - 26, y2: sy, stroke: "rgba(141,200,255,0.18)", "stroke-width": 1 }));
+        if (sig.mentions > 0) svg.appendChild(svgEl("text", { x: mx, y: my - 4, "text-anchor": "middle", fill: "rgba(200,210,225,0.28)", "font-size": 7.5 }, `${sig.mentions}×`));
+
+        svg.appendChild(svgEl("circle", { cx: SIG_X, cy: sy, r: 26, fill: "rgba(141,200,255,0.07)", stroke: color, "stroke-width": 1.5 }));
+        const words = sig.label.split(" ");
+        const [w1, w2] = [words.slice(0, 2).join(" "), words.slice(2).join(" ")];
+        svg.appendChild(svgEl("text", { x: SIG_X, y: sy + (w2 ? -5 : 4), "text-anchor": "middle", fill: "#ccd6f6", "font-size": 7.5, "font-weight": 500 }, w1));
+        if (w2) svg.appendChild(svgEl("text", { x: SIG_X, y: sy + 7, "text-anchor": "middle", fill: "#ccd6f6", "font-size": 7.5, "font-weight": 500 }, w2));
+
+        svg.appendChild(svgEl("line", { x1: SIG_X + 26, y1: sy, x2: BAR_X, y2: sy, stroke: "rgba(141,200,255,0.12)", "stroke-width": 1 }));
+        const filled = Math.max(0, (sig.score / 5) * BAR_W);
+        svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: BAR_W, height: 8, rx: 4, fill: "rgba(255,255,255,0.05)" }));
+        svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: filled, height: 8, rx: 4, fill: color, opacity: 0.75 }));
+        svg.appendChild(svgEl("text", { x: BAR_X + BAR_W + 7, y: sy + 4, fill: color, "font-size": 9, "font-weight": 600 }, `${sig.score}/5`));
+      });
+
+      // ── Market cluster ──────────────────────────────────────────
+      const DIV_Y = 220;
+      svg.appendChild(svgEl("line", { x1: 0, y1: DIV_Y, x2: 600, y2: DIV_Y, stroke: "rgba(141,200,255,0.07)", "stroke-width": 1 }));
+      svg.appendChild(svgEl("text", { x: 8, y: DIV_Y + 18, fill: "rgba(200,210,225,0.35)", "font-size": 8.5, "font-weight": 700, "letter-spacing": "0.09em" }, "MARKET SIGNALS"));
+
+      const MKT_X = 52, MKT_Y = 305;
+      svg.appendChild(svgEl("circle", { cx: MKT_X, cy: MKT_Y, r: 28, fill: "rgba(121,192,255,0.1)", stroke: "#79c0ff", "stroke-width": 1.5 }));
+      svg.appendChild(svgEl("text", { x: MKT_X, y: MKT_Y - 7, "text-anchor": "middle", fill: "#79c0ff", "font-size": 9, "font-weight": 600 }, "Kalshi"));
+      svg.appendChild(svgEl("text", { x: MKT_X, y: MKT_Y + 6, "text-anchor": "middle", fill: "rgba(200,210,225,0.35)", "font-size": 7.5 }, mktData?.target_meeting ?? "—"));
+      svg.appendChild(svgEl("text", { x: MKT_X, y: MKT_Y + 18, "text-anchor": "middle", fill: "rgba(200,210,225,0.22)", "font-size": 7 }, "Markets"));
+
+      if (mktData?.blended_probabilities) {
+        const bp = mktData.blended_probabilities;
+        const tot = (bp.raise ?? 0) + (bp.hold ?? 0) + (bp.cut ?? 0);
+        const norm = (v) => (tot > 0 ? v / tot : 0);
+        [{ key: "hold", label: "Hold", color: "#8dc8ff" }, { key: "cut", label: "Cut", color: "#58a6ff" }, { key: "raise", label: "Raise", color: "#ff7b72" }]
+          .forEach(({ key, label, color }, j) => {
+            const sy = MKT_Y - 48 + j * 48;
+            const pct = norm(bp[key] ?? 0);
+            const pctTxt = Math.round(pct * 100) + "%";
+            svg.appendChild(svgEl("line", { x1: MKT_X + 28, y1: MKT_Y, x2: SIG_X - 20, y2: sy, stroke: "rgba(141,200,255,0.18)", "stroke-width": 1 }));
+            svg.appendChild(svgEl("circle", { cx: SIG_X, cy: sy, r: 20, fill: "rgba(141,200,255,0.06)", stroke: color, "stroke-width": 1.5 }));
+            svg.appendChild(svgEl("text", { x: SIG_X, y: sy - 4, "text-anchor": "middle", fill: "#ccd6f6", "font-size": 7.5 }, label));
+            svg.appendChild(svgEl("text", { x: SIG_X, y: sy + 7, "text-anchor": "middle", fill: color, "font-size": 9, "font-weight": 600 }, pctTxt));
+            svg.appendChild(svgEl("line", { x1: SIG_X + 20, y1: sy, x2: BAR_X, y2: sy, stroke: "rgba(141,200,255,0.12)", "stroke-width": 1 }));
+            const filled = pct * BAR_W;
+            svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: BAR_W, height: 8, rx: 4, fill: "rgba(255,255,255,0.05)" }));
+            svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: filled, height: 8, rx: 4, fill: color, opacity: 0.75 }));
+            svg.appendChild(svgEl("text", { x: BAR_X + BAR_W + 7, y: sy + 4, fill: color, "font-size": 9, "font-weight": 600 }, pctTxt));
+          });
+      } else {
+        svg.appendChild(svgEl("text", { x: 300, y: MKT_Y, "text-anchor": "middle", fill: "rgba(200,210,225,0.22)", "font-size": 11 }, "Run market ingestion to view live odds"));
+      }
+    }
+
+    function initVizTabs() {
+      const tabBtns = document.querySelectorAll(".viz-tab");
+      tabBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          tabBtns.forEach((b) => b.classList.remove("viz-tab-active"));
+          document.querySelectorAll(".viz-panel").forEach((p) => p.classList.remove("viz-panel-active"));
+          btn.classList.add("viz-tab-active");
+          document.getElementById("viz-panel-" + btn.dataset.viz).classList.add("viz-panel-active");
+          if (btn.dataset.viz === "rate-timeline") drawRateTimeline();
+          else if (btn.dataset.viz === "knowledge-graph") drawKnowledgeGraph();
+        });
+      });
+      drawRateTimeline();
+    }
+
+    initVizTabs();
   </script>
 </body>
 </html>
