@@ -608,11 +608,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ingest Kalshi and Polymarket market snapshots into SQLite.")
     parser.add_argument("--db-path", default=str(DEFAULT_DB_PATH), help="SQLite database path.")
     parser.add_argument("--watchlist", required=True, help="Path to a JSON watchlist file.")
+    parser.add_argument(
+        "--dashboard-js",
+        help="Optional path to write a JS payload (window.__MARKET_DASHBOARD_DATA__) for index.html.",
+    )
+    parser.add_argument(
+        "--dashboard-target-meeting",
+        help="Optional target meeting date (YYYY-MM-DD) for the dashboard export. Defaults to nearest future meeting.",
+    )
     args = parser.parse_args(argv)
 
     store = MarketSnapshotStore(args.db_path)
     service = MarketIngestionService(store=store)
     snapshots = service.ingest(load_watchlist(args.watchlist))
+    if args.dashboard_js:
+        export_dashboard_market_js(
+            db_path=args.db_path,
+            output_js_path=args.dashboard_js,
+            target_meeting=args.dashboard_target_meeting,
+        )
     print(f"Ingested {len(snapshots)} market snapshots into {args.db_path}.")
     return 0
 
@@ -799,6 +813,165 @@ def _date_only(value: str | None) -> str | None:
     if value is None:
         return None
     return value[:10]
+
+
+def export_dashboard_market_js(
+    *,
+    db_path: str | Path = DEFAULT_DB_PATH,
+    output_js_path: str | Path,
+    target_meeting: str | None = None,
+) -> dict[str, object] | None:
+    payload = build_dashboard_market_payload(db_path=db_path, target_meeting=target_meeting)
+    output_path = Path(output_js_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if payload is None:
+        output_path.write_text("window.__MARKET_DASHBOARD_DATA__ = null;\n", encoding="utf-8")
+        return None
+    output_path.write_text(
+        "window.__MARKET_DASHBOARD_DATA__ = "
+        + json.dumps(payload, sort_keys=True, indent=2)
+        + ";\n",
+        encoding="utf-8",
+    )
+    return payload
+
+
+def build_dashboard_market_payload(
+    *,
+    db_path: str | Path = DEFAULT_DB_PATH,
+    target_meeting: str | None = None,
+) -> dict[str, object] | None:
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            WITH ranked AS (
+                SELECT
+                    provider,
+                    market_id,
+                    target_meeting,
+                    published_at,
+                    canonical_probabilities_json,
+                    volume,
+                    liquidity,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY provider, market_id, target_meeting
+                        ORDER BY published_at DESC
+                    ) AS row_rank
+                FROM market_snapshots
+                WHERE target_meeting IS NOT NULL
+            )
+            SELECT
+                provider,
+                market_id,
+                target_meeting,
+                published_at,
+                canonical_probabilities_json,
+                volume,
+                liquidity
+            FROM ranked
+            WHERE row_rank = 1
+            ORDER BY target_meeting ASC, provider ASC, market_id ASC
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+
+    if not rows:
+        return None
+
+    grouped_rows: dict[str, list[sqlite3.Row]] = {}
+    for row in rows:
+        grouped_rows.setdefault(str(row["target_meeting"]), []).append(row)
+
+    selected_target_meeting = target_meeting or _choose_default_target_meeting(grouped_rows.keys())
+    meeting_rows = grouped_rows.get(selected_target_meeting, [])
+    if not meeting_rows:
+        return None
+
+    provider_summaries: dict[str, dict[str, object]] = {}
+    for row in meeting_rows:
+        provider = str(row["provider"])
+        summary = provider_summaries.setdefault(
+            provider,
+            {
+                "market_count": 0,
+                "latest_published_at": str(row["published_at"]),
+                "probabilities_raw": {"raise": 0.0, "hold": 0.0, "cut": 0.0},
+                "volume": 0.0,
+                "liquidity": 0.0,
+            },
+        )
+        summary["market_count"] = int(summary["market_count"]) + 1
+        summary["latest_published_at"] = max(str(summary["latest_published_at"]), str(row["published_at"]))
+        summary["volume"] = float(summary["volume"]) + float(row["volume"] or 0.0)
+        summary["liquidity"] = float(summary["liquidity"]) + float(row["liquidity"] or 0.0)
+
+        raw_probs = summary["probabilities_raw"]
+        parsed_probs = json.loads(row["canonical_probabilities_json"] or "{}")
+        for label in ("raise", "hold", "cut"):
+            value = parsed_probs.get(label, 0.0) if isinstance(parsed_probs, Mapping) else 0.0
+            raw_probs[label] = float(raw_probs[label]) + float(value or 0.0)
+
+    providers_payload: dict[str, dict[str, object]] = {}
+    provider_probability_vectors: list[dict[str, float]] = []
+    for provider, summary in provider_summaries.items():
+        normalized_probs = _normalize_probability_triplet(summary["probabilities_raw"])
+        providers_payload[provider] = {
+            "market_count": int(summary["market_count"]),
+            "latest_published_at": str(summary["latest_published_at"]),
+            "probabilities": normalized_probs,
+            "volume": round(float(summary["volume"]), 4),
+            "liquidity": round(float(summary["liquidity"]), 4),
+        }
+        if any(normalized_probs.values()):
+            provider_probability_vectors.append(normalized_probs)
+
+    if provider_probability_vectors:
+        blended_probabilities = {
+            label: round(
+                sum(vector[label] for vector in provider_probability_vectors) / len(provider_probability_vectors),
+                4,
+            )
+            for label in ("raise", "hold", "cut")
+        }
+    else:
+        blended_probabilities = {"raise": 0.0, "hold": 0.0, "cut": 0.0}
+
+    payload: dict[str, object] = {
+        "generated_at": _utcnow().isoformat(),
+        "target_meeting": selected_target_meeting,
+        "providers": providers_payload,
+        "blended_probabilities": blended_probabilities,
+        "market_count": sum(item["market_count"] for item in providers_payload.values()),
+    }
+    return payload
+
+
+def _normalize_probability_triplet(raw_values: Mapping[str, float]) -> dict[str, float]:
+    raise_raw = float(raw_values.get("raise", 0.0) or 0.0)
+    hold_raw = float(raw_values.get("hold", 0.0) or 0.0)
+    cut_raw = float(raw_values.get("cut", 0.0) or 0.0)
+    total = raise_raw + hold_raw + cut_raw
+    if total <= 0:
+        return {"raise": 0.0, "hold": 0.0, "cut": 0.0}
+    return {
+        "raise": round(raise_raw / total, 4),
+        "hold": round(hold_raw / total, 4),
+        "cut": round(cut_raw / total, 4),
+    }
+
+
+def _choose_default_target_meeting(meetings: Iterable[str]) -> str:
+    values = sorted(meeting for meeting in meetings if meeting)
+    if not values:
+        raise MarketIngestionError("No target meetings were available for dashboard export.")
+    today = _utcnow().date().isoformat()
+    for meeting in values:
+        if meeting >= today:
+            return meeting
+    return values[-1]
 
 
 if __name__ == "__main__":

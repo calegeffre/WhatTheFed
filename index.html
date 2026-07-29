@@ -401,6 +401,12 @@
   </main>
 
   <script>
+    window.__FOMC_DASHBOARD_DATA__ = window.__FOMC_DASHBOARD_DATA__ || null;
+    window.__MARKET_DASHBOARD_DATA__ = window.__MARKET_DASHBOARD_DATA__ || null;
+  </script>
+  <script src="data/fomc_dashboard_data.js"></script>
+  <script src="data/market_dashboard_data.js"></script>
+  <script>
     const dashboardData = {
       next_meeting_prediction: {
         decision: "raise",
@@ -477,16 +483,117 @@
         ],
       },
     };
+
+    const fomcOverlay = window.__FOMC_DASHBOARD_DATA__;
+    const marketOverlay = window.__MARKET_DASHBOARD_DATA__;
+    const normalizeTriplet = (values) => {
+      const parsed = {
+        raise: Number(values?.raise || 0),
+        hold: Number(values?.hold || 0),
+        cut: Number(values?.cut || 0),
+      };
+      const total = parsed.raise + parsed.hold + parsed.cut;
+      if (total <= 0) {
+        return { raise: 0, hold: 0, cut: 0 };
+      }
+      return {
+        raise: parsed.raise / total,
+        hold: parsed.hold / total,
+        cut: parsed.cut / total,
+      };
+    };
+    const formatPct = (value) => `${Math.round((value || 0) * 100)}%`;
+    const scoreFromProbability = (value) => Math.max(1, Math.min(5, Math.round((value || 0) * 5)));
+    const toneFromScore = (score) => {
+      if (score >= 5) return "hot";
+      if (score === 4) return "warm";
+      if (score === 3) return "balanced";
+      if (score === 2) return "cool";
+      return "cold";
+    };
+
+    const marketPrediction = (() => {
+      if (!marketOverlay || !marketOverlay.blended_probabilities) return null;
+      const blended = normalizeTriplet(marketOverlay.blended_probabilities);
+      const ordered = Object.entries(blended).sort((a, b) => b[1] - a[1]);
+      const [decision, confidence] = ordered[0];
+      const providerNotes = Object.entries(marketOverlay.providers || {}).map(([provider, payload]) => {
+        const providerBlend = normalizeTriplet(payload.probabilities || {});
+        return `${provider}: R ${formatPct(providerBlend.raise)}, H ${formatPct(providerBlend.hold)}, C ${formatPct(providerBlend.cut)}`;
+      });
+      return {
+        decision,
+        confidence,
+        rationale:
+          `Market blend (${marketOverlay.target_meeting}): ` +
+          `R ${formatPct(blended.raise)}, H ${formatPct(blended.hold)}, C ${formatPct(blended.cut)}.` +
+          (providerNotes.length ? ` Providers: ${providerNotes.join("; ")}` : ""),
+      };
+    })();
+
+    const marketHeatCards = (() => {
+      if (!marketOverlay || !marketOverlay.blended_probabilities) return [];
+      const blended = normalizeTriplet(marketOverlay.blended_probabilities);
+      const labels = [
+        { key: "raise", title: "Market Raise Odds" },
+        { key: "hold", title: "Market Hold Odds" },
+        { key: "cut", title: "Market Cut Odds" },
+      ];
+      const providerNotes = Object.entries(marketOverlay.providers || {}).map(([provider, payload]) => {
+        const providerBlend = normalizeTriplet(payload.probabilities || {});
+        return { provider, probs: providerBlend };
+      });
+      return labels.map((item) => {
+        const score = scoreFromProbability(blended[item.key]);
+        return {
+          label: item.title,
+          score,
+          tone: toneFromScore(score),
+          sources: [
+            `target ${marketOverlay.target_meeting}`,
+            ...providerNotes.map((note) => `${note.provider}: ${formatPct(note.probs[item.key])}`),
+          ],
+        };
+      });
+    })();
+
+    const fomcHeatCards = (() => {
+      if (!fomcOverlay || !Array.isArray(fomcOverlay.signals) || !fomcOverlay.signals.length) {
+        return dashboardData.dashboard.next_meeting_heat_map;
+      }
+      return fomcOverlay.signals.map((signal) => {
+        const score = Math.max(1, Math.min(5, Number(signal?.score || 3)));
+        return {
+          label: String(signal?.label || "FOMC Signal"),
+          score,
+          tone: String(signal?.tone || toneFromScore(score)),
+          sources: Array.isArray(signal?.sources) ? signal.sources.map((source) => String(source)) : [],
+        };
+      });
+    })();
+
+    const activePrediction = marketPrediction || dashboardData.next_meeting_prediction;
+    const combinedHeatMap = [...fomcHeatCards, ...marketHeatCards];
+
+    const nextMeetingDate = marketOverlay?.target_meeting || fomcOverlay?.meeting_date || "N/A";
     document.getElementById("summary").textContent =
-      "This dashboard is wired to the same data shape returned by the Python RAG analyzer, so the heat map can be replaced later with serialized live output.";
+      `Mix of parsed FOMC statements, daily market snapshots. Next FOMC Meeting: ${nextMeetingDate}`;
     document.getElementById("prediction-title").textContent =
-      `Predicted next move: ${dashboardData.next_meeting_prediction.decision.toUpperCase()}`;
+      `Predicted next move: ${String(activePrediction.decision).toUpperCase()}`;
     document.getElementById("confidence").textContent =
-      `${Math.round(dashboardData.next_meeting_prediction.confidence * 100)}% confidence`;
-    document.getElementById("rationale").textContent = dashboardData.next_meeting_prediction.rationale;
+      `${Math.round(Number(activePrediction.confidence || 0) * 100)}% confidence`;
+    document.getElementById("rationale").textContent = activePrediction.rationale;
 
     const sources = document.getElementById("sources");
-    dashboardData.evidence_sources.forEach((source) => {
+    const sourceItems = new Set(dashboardData.evidence_sources);
+    if (fomcOverlay && fomcOverlay.meeting_date) {
+      sourceItems.add(`fomc:${fomcOverlay.meeting_date}`);
+    }
+    if (marketOverlay) {
+      sourceItems.add(`market:${marketOverlay.target_meeting}`);
+      Object.keys(marketOverlay.providers || {}).forEach((provider) => sourceItems.add(`market:${provider}`));
+    }
+    [...sourceItems].forEach((source) => {
       const pill = document.createElement("span");
       pill.className = "source-pill";
       pill.textContent = source;
@@ -494,7 +601,7 @@
     });
 
     const heatMap = document.getElementById("heat-map");
-    dashboardData.dashboard.next_meeting_heat_map.forEach((item) => {
+    combinedHeatMap.forEach((item) => {
       const card = document.createElement("article");
       card.className = `heat-cell heat-${item.tone}`;
       card.innerHTML = `

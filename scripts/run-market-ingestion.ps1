@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $watchlistPath = Join-Path $repoRoot "config\market_watchlist.json"
 $dbPath = Join-Path $repoRoot "data\market_snapshots.db"
+$dashboardJsPath = Join-Path $repoRoot "data\market_dashboard_data.js"
 $logDirectory = Join-Path $repoRoot "data\logs"
 $logPath = Join-Path $logDirectory ("market-ingestion-{0}.log" -f (Get-Date -Format "yyyy-MM-dd"))
 
@@ -12,7 +13,7 @@ $pythonPath = (Get-Command python).Source
 
 Push-Location $repoRoot
 try {
-    & $pythonPath -c "from whatthefed.market_ingestion import main; raise SystemExit(main())" --watchlist $watchlistPath --db-path $dbPath *>> $logPath
+    & $pythonPath -c "from whatthefed.market_ingestion import main; raise SystemExit(main())" --watchlist $watchlistPath --db-path $dbPath --dashboard-js $dashboardJsPath *>> $logPath
     if ($LASTEXITCODE -ne 0) {
         throw "Market ingestion exited with code $LASTEXITCODE."
     }

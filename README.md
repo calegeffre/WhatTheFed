@@ -48,9 +48,26 @@ Open `./index.html` in a browser to view a static dashboard prototype with:
 - a next-meeting heat map
 - a scrollable previous-meeting history with direct links to each official Fed HTML statement
 
-The page is wired to the same top-level data shape returned by `FedRAGAnalyzer.analyze(...)`, so the inline demo payload can later be replaced with serialized RAG output.
+The page is wired to the same top-level data shape returned by `FedRAGAnalyzer.analyze(...)`, and it also reads `data/market_dashboard_data.js` when available to blend Kalshi/Polymarket odds into the heat map and next-meeting prediction card.
 
 ![Dashboard preview](assets/dashboard-preview.png)
+
+## One-off FOMC statement ingestion
+
+You can ingest real FOMC statement text from the Fed calendar into SQLite with a single manual run (no scheduler):
+
+```bash
+python -m whatthefed.fomc_ingestion --db-path data/market_snapshots.db --max-meetings 12 --dashboard-js data/fomc_dashboard_data.js
+```
+
+This creates/updates a `fomc_statements` table in the same DB and stores parsed fields for each meeting, including:
+
+- official statement URL and meeting date
+- parsed decision and vote tally
+- cleaned statement text and summary
+- signal counts (`inflation`, `labor`, `growth`, `policy`) for heat-map style analytics
+
+When `--dashboard-js` is provided, it also writes a browser-ready payload (`window.__FOMC_DASHBOARD_DATA__ = ...`) consumed by `index.html` so the four policy-signal heat-map tiles use real parsed FOMC data.
 
 ## Knowledge graph backend
 
@@ -152,15 +169,17 @@ Example watchlist JSON:
 Run ingestion manually with:
 
 ```bash
-python -m whatthefed.market_ingestion --watchlist config/market_watchlist.json
+python -m whatthefed.market_ingestion --watchlist config/market_watchlist.json --dashboard-js data/market_dashboard_data.js
 ```
+
+The `--dashboard-js` output writes a browser-ready payload (`window.__MARKET_DASHBOARD_DATA__ = ...`) so `index.html` can show a live market overlay without running a backend server.
 
 ### Recommended scheduling
 
 For daily updates, the simplest path is:
 
 1. store the watchlist JSON in the repo or deployment environment
-2. run `python -m whatthefed.market_ingestion --watchlist ...` once per day
+2. run `python -m whatthefed.market_ingestion --watchlist ... --dashboard-js data/market_dashboard_data.js` once per day
 3. load stored snapshots back into `Document` objects with `MarketSnapshotStore.load_documents(...)`
 4. feed those market documents into `KnowledgeGraphBuilder` alongside FOMC and macro documents
 

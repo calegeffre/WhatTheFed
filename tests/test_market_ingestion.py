@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ from whatthefed import (
     MarketWatchConfig,
     PolymarketEventClient,
     PolymarketMarketClient,
+    export_dashboard_market_js,
     load_watchlist,
 )
 
@@ -243,6 +245,42 @@ class MarketIngestionTests(unittest.TestCase):
             self.assertEqual(len(watchlist), 1)
             self.assertEqual(watchlist[0].provider, "kalshi_event")
             self.assertEqual(watchlist[0].market_ref, "KXFEDDECISION-26SEP")
+
+    def test_exports_dashboard_js_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "snapshots.db"
+            js_path = Path(temp_dir) / "market_dashboard_data.js"
+            store = MarketSnapshotStore(db_path)
+            service = MarketIngestionService(
+                store=store,
+                kalshi_client=KalshiMarketClient(fetch_json=lambda _: self.kalshi_payload),
+                polymarket_client=PolymarketMarketClient(fetch_json=lambda _: self.polymarket_payload),
+            )
+            service.clients["kalshi_event"] = KalshiEventClient(fetch_json=lambda _: self.kalshi_event_payload)
+            service.clients["polymarket_event"] = PolymarketEventClient(
+                fetch_json=lambda _: self.polymarket_event_payload
+            )
+            service.ingest(
+                [
+                    MarketWatchConfig(provider="kalshi_event", market_ref="KXFEDDECISION-26SEP"),
+                    MarketWatchConfig(provider="polymarket_event", market_ref="fed-decision-in-september-762"),
+                ]
+            )
+
+            payload = export_dashboard_market_js(
+                db_path=db_path,
+                output_js_path=js_path,
+                target_meeting="2026-09-16",
+            )
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload["target_meeting"], "2026-09-16")
+            self.assertIn("blended_probabilities", payload)
+            self.assertIn("providers", payload)
+
+            js_text = js_path.read_text(encoding="utf-8")
+            self.assertTrue(js_text.startswith("window.__MARKET_DASHBOARD_DATA__ = "))
+            json_payload = json.loads(js_text.split("=", 1)[1].strip().rstrip(";"))
+            self.assertEqual(json_payload["target_meeting"], "2026-09-16")
 
 
 if __name__ == "__main__":
