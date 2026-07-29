@@ -370,6 +370,37 @@
         grid-template-columns: repeat(2, minmax(120px, 1fr));
       }
     }
+
+    .year-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .year-tab {
+      padding: 8px 20px;
+      border-radius: 999px;
+      border: 1px solid rgba(141, 200, 255, 0.2);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+
+    .year-tab:hover {
+      background: rgba(141, 200, 255, 0.1);
+      color: var(--text);
+      border-color: rgba(141, 200, 255, 0.35);
+    }
+
+    .year-tab.year-tab-active {
+      background: rgba(141, 200, 255, 0.18);
+      color: #8dc8ff;
+      border-color: rgba(141, 200, 255, 0.5);
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -396,15 +427,18 @@
     <section class="section">
       <div class="eyebrow">Previous meeting history</div>
       <p class="note">Each card links to the official Fed HTML statement and shows the decision, published tally, dissent context, and the same generic voter icons used in the latest-meeting view.</p>
+      <div id="year-tabs" class="year-tabs"></div>
       <div id="meeting-timeline" class="timeline-scroll"></div>
     </section>
   </main>
 
   <script>
     window.__FOMC_DASHBOARD_DATA__ = window.__FOMC_DASHBOARD_DATA__ || null;
+    window.__FOMC_HISTORY_DATA__ = window.__FOMC_HISTORY_DATA__ || null;
     window.__MARKET_DASHBOARD_DATA__ = window.__MARKET_DASHBOARD_DATA__ || null;
   </script>
   <script src="data/fomc_dashboard_data.js"></script>
+  <script src="data/fomc_history_data.js"></script>
   <script src="data/market_dashboard_data.js"></script>
   <script>
     const dashboardData = {
@@ -626,7 +660,47 @@
     const voteOrder = ["hold", "hold-dissent", "raise", "cut"];
 
     const meetingTimeline = document.getElementById("meeting-timeline");
-    dashboardData.meeting_history.forEach((meeting) => {
+    const yearTabsEl = document.getElementById("year-tabs");
+    const historyOverlay = window.__FOMC_HISTORY_DATA__;
+
+    // 2026 uses hardcoded data (voter grids + dissent notes); prior years come from parsed DB
+    const allMeetingsByYear = {};
+    allMeetingsByYear["2026"] = { source: "hardcoded", meetings: dashboardData.meeting_history };
+    if (historyOverlay) {
+      Object.entries(historyOverlay).forEach(([year, meetings]) => {
+        if (year !== "2026") allMeetingsByYear[year] = { source: "db", meetings };
+      });
+    }
+
+    const availableYears = Object.keys(allMeetingsByYear).sort((a, b) => Number(b) - Number(a));
+    let activeYear = availableYears[0];
+
+    function renderDbCard(meeting) {
+      const card = document.createElement("article");
+      card.className = "timeline-card";
+      const tallyChip = meeting.vote_tally
+        ? `<span class="source-pill">Official vote: ${meeting.vote_tally}</span>`
+        : "";
+      card.innerHTML = `
+        <div class="timeline-header">
+          <div class="timeline-title">
+            <div class="eyebrow">${meeting.meeting_date}</div>
+            <h3>${meeting.label}</h3>
+          </div>
+          <div class="timeline-links">
+            <a class="pill" href="${meeting.source_url}" target="_blank" rel="noopener noreferrer">FOMC Statement</a>
+          </div>
+        </div>
+        <div class="timeline-stats">
+          <span class="pill">Decision: ${String(meeting.decision).toUpperCase()}</span>
+          ${tallyChip}
+        </div>
+        <p class="note">${meeting.summary || ""}</p>
+      `;
+      return card;
+    }
+
+    function renderFullCard(meeting) {
       const counts = voteOrder
         .map((vote) => ({
           vote,
@@ -690,8 +764,37 @@
             .join("")}
         </div>
       `;
-      meetingTimeline.appendChild(card);
-    });
+      return card;
+    }
+
+    function renderTimeline() {
+      meetingTimeline.innerHTML = "";
+      const yearData = allMeetingsByYear[activeYear];
+      if (!yearData) return;
+      yearData.meetings.forEach((meeting) => {
+        const card = yearData.source === "hardcoded" ? renderFullCard(meeting) : renderDbCard(meeting);
+        meetingTimeline.appendChild(card);
+      });
+    }
+
+    function renderTabs() {
+      yearTabsEl.innerHTML = availableYears
+        .map(
+          (year) =>
+            `<button class="year-tab${year === activeYear ? " year-tab-active" : ""}" data-year="${year}">${year}</button>`
+        )
+        .join("");
+      yearTabsEl.querySelectorAll(".year-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeYear = btn.dataset.year;
+          renderTabs();
+          renderTimeline();
+        });
+      });
+    }
+
+    renderTabs();
+    renderTimeline();
   </script>
 </body>
 </html>

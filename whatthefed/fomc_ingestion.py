@@ -348,6 +348,10 @@ def main(argv: list[str] | None = None) -> int:
         "--dashboard-meeting-date",
         help="Optional meeting date (YYYY-MM-DD) to export into the dashboard payload. Defaults to latest meeting.",
     )
+    parser.add_argument(
+        "--history-js",
+        help="Optional path to write per-year FOMC meeting history as JS (window.__FOMC_HISTORY_DATA__) for index.html.",
+    )
     args = parser.parse_args(argv)
 
     store = FOMCStatementStore(args.db_path)
@@ -359,6 +363,8 @@ def main(argv: list[str] | None = None) -> int:
             output_js_path=args.dashboard_js,
             meeting_date=args.dashboard_meeting_date,
         )
+    if args.history_js:
+        export_dashboard_fomc_history_js(db_path=args.db_path, output_js_path=args.history_js)
     print(f"Ingested {len(statements)} FOMC statements into {args.db_path}.")
     return 0
 
@@ -554,6 +560,56 @@ def _meeting_label_from_iso(value: str) -> str:
         return datetime.fromisoformat(value).strftime("%B %Y")
     except ValueError:
         return value
+
+
+def build_dashboard_fomc_history_payload(
+    *,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> dict[str, list[dict[str, object]]]:
+    """Returns all FOMC meetings grouped by calendar year, newest first within each year."""
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            SELECT meeting_date, title, decision, vote_tally, summary, statement_url
+            FROM fomc_statements
+            ORDER BY meeting_date DESC
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for row in rows:
+        year = str(row["meeting_date"])[:4]
+        grouped.setdefault(year, []).append(
+            {
+                "meeting_date": row["meeting_date"],
+                "label": _meeting_label_from_iso(str(row["meeting_date"])),
+                "decision": row["decision"],
+                "vote_tally": row["vote_tally"],
+                "summary": row["summary"],
+                "source_url": row["statement_url"],
+                "title": row["title"],
+            }
+        )
+    return grouped
+
+
+def export_dashboard_fomc_history_js(
+    *,
+    db_path: str | Path = DEFAULT_DB_PATH,
+    output_js_path: str | Path,
+) -> dict[str, list[dict[str, object]]]:
+    payload = build_dashboard_fomc_history_payload(db_path=db_path)
+    output_path = Path(output_js_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        "window.__FOMC_HISTORY_DATA__ = " + json.dumps(payload, sort_keys=True, indent=2) + ";\n",
+        encoding="utf-8",
+    )
+    return payload
 
 
 def _fetch_text(url: str) -> str:

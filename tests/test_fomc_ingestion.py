@@ -7,6 +7,7 @@ from whatthefed.fomc_ingestion import (
     FOMC_BASE_URL,
     FOMCStatementStore,
     export_dashboard_fomc_js,
+    export_dashboard_fomc_history_js,
     parse_calendar_statement_urls,
     parse_statement_html,
 )
@@ -127,6 +128,30 @@ class FOMCIngestionTests(unittest.TestCase):
             self.assertTrue(js_text.startswith("window.__FOMC_DASHBOARD_DATA__ = "))
             parsed_payload = json.loads(js_text.split("=", 1)[1].strip().rstrip(";"))
             self.assertEqual(parsed_payload["meeting_date"], "2026-06-17")
+
+    def test_exports_history_js_grouped_by_year(self) -> None:
+        june_stmt = parse_statement_html(
+            f"{FOMC_BASE_URL}/newsevents/pressreleases/monetary20260617a.htm",
+            SAMPLE_STATEMENT_HTML,
+        )
+        march_stmt = parse_statement_html(
+            f"{FOMC_BASE_URL}/newsevents/pressreleases/monetary20260318a.htm",
+            SAMPLE_STATEMENT_HTML.replace("June 17, 2026", "March 18, 2026"),
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "fomc.db"
+            js_path = Path(temp_dir) / "fomc_history_data.js"
+            store = FOMCStatementStore(db_path)
+            store.write_statement(june_stmt)
+            store.write_statement(march_stmt)
+
+            payload = export_dashboard_fomc_history_js(db_path=db_path, output_js_path=js_path)
+            self.assertIn("2026", payload)
+            self.assertEqual(len(payload["2026"]), 2)
+            self.assertEqual(payload["2026"][0]["meeting_date"], "2026-06-17")
+
+            js_text = js_path.read_text(encoding="utf-8")
+            self.assertTrue(js_text.startswith("window.__FOMC_HISTORY_DATA__ = "))
 
 
 if __name__ == "__main__":
