@@ -9,6 +9,7 @@ from typing import Iterable
 
 
 TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9\-']*")
+UNANIMOUS_VOTE_RE = re.compile(r"\b(\d+)\s*[-–]\s*0\s+vote\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,7 @@ class FedRAGAnalyzer:
             "evidence_sources": [doc.source for doc in evidence],
             "dashboard": {
                 "next_meeting_heat_map": self._build_heat_map(evidence),
-                "last_meeting_votes": self._build_member_votes(last_meeting_decision),
+                "last_meeting_votes": self._build_member_votes(last_meeting_decision, latest_meeting.content),
             },
         }
 
@@ -199,18 +200,29 @@ class FedRAGAnalyzer:
             )
         return cards
 
-    def _build_member_votes(self, last_meeting_decision: str) -> list[dict[str, str]]:
-        votes = self.LAST_MEETING_VOTE_DISTRIBUTIONS.get(
-            last_meeting_decision,
-            self.LAST_MEETING_VOTE_DISTRIBUTIONS["hold"],
-        )
+    def _build_member_votes(self, last_meeting_decision: str, meeting_text: str) -> list[dict[str, str]]:
+        unanimous_vote_count = self._extract_unanimous_vote_count(meeting_text)
+        if unanimous_vote_count is not None:
+            votes = [last_meeting_decision] * unanimous_vote_count
+        else:
+            votes = self.LAST_MEETING_VOTE_DISTRIBUTIONS.get(
+                last_meeting_decision,
+                self.LAST_MEETING_VOTE_DISTRIBUTIONS["hold"],
+            )
         return [
             {
                 "member": f"Member {index + 1:02d}",
                 "vote": votes[index],
             }
-            for index in range(self.GENERIC_VOTER_COUNT)
+            for index in range(len(votes))
         ]
+
+    @staticmethod
+    def _extract_unanimous_vote_count(text: str) -> int | None:
+        match = UNANIMOUS_VOTE_RE.search(text)
+        if match is None:
+            return None
+        return int(match.group(1))
 
     @staticmethod
     def _heat_map_tone(score: int) -> str:

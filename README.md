@@ -45,8 +45,7 @@ print(report["dashboard"]["next_meeting_heat_map"])
 Open `./index.html` in a browser to view a static dashboard prototype with:
 
 - a next-meeting heat map
-- a latest-meeting summary card
-- 12 generic voter cards for the last meeting
+- a scrollable previous-meeting history with direct links to each official Fed HTML statement
 
 The page is wired to the same top-level data shape returned by `FedRAGAnalyzer.analyze(...)`, so the inline demo payload can later be replaced with serialized RAG output.
 

@@ -57,6 +57,26 @@ class FedRAGAnalyzerTests(unittest.TestCase):
         self.assertEqual(len(report["dashboard"]["next_meeting_heat_map"]), 4)
         self.assertEqual(report["dashboard"]["last_meeting_votes"][0]["member"], "Member 01")
 
+    def test_analyze_uses_unanimous_vote_tally_when_present(self) -> None:
+        report = self.analyzer.analyze(
+            meeting_notes=[
+                Document(
+                    source="fomc_2026_06",
+                    content=(
+                        "The Federal Open Market Committee approved the following statement "
+                        "for release by a 12-0 vote. "
+                        "The committee held rates unchanged. "
+                        "Members emphasized persistent inflation and resilient labor conditions."
+                    ),
+                    kind="meeting_note",
+                    meeting_date="2026-06-17",
+                )
+            ],
+            trusted_signals=self.trusted_signals,
+        )
+        self.assertEqual(len(report["dashboard"]["last_meeting_votes"]), 12)
+        self.assertTrue(all(vote["vote"] == "hold" for vote in report["dashboard"]["last_meeting_votes"]))
+
 
 if __name__ == "__main__":
     unittest.main()
