@@ -39,6 +39,13 @@ VOTE_TALLY_PATTERNS = (
     re.compile(r"\b(?P<for_votes>\d+)\s*[–-]\s*(?P<against_votes>\d+)\s+vote\b", re.IGNORECASE),
     re.compile(r"\bvote\s+of\s+(?P<for_votes>\d+)\s*[–-]\s*(?P<against_votes>\d+)\b", re.IGNORECASE),
 )
+# Matches the "Voting for the monetary policy action were ..." sentence in older statements.
+# Capture group 1 is everything up to the start of "Voting against" or the closing </p>.
+VOTING_FOR_RE = re.compile(
+    r"Voting for the monetary policy action were\s+([^<]+?)(?=Voting against|</p>)",
+    re.IGNORECASE | re.DOTALL,
+)
+FOMC_COMMITTEE_SIZE = 12
 
 INFLATION_TERMS = (
     "inflation",
@@ -306,7 +313,7 @@ def parse_statement_html(statement_url: str, statement_html: str) -> FOMCStateme
 
     content = "\n\n".join(paragraphs)
     summary = " ".join(paragraphs[:2]).strip()
-    vote_tally = _extract_vote_tally(content)
+    vote_tally = _extract_vote_tally(article_block)
     decision = _infer_decision(content)
     lowered = content.lower()
 
@@ -410,10 +417,22 @@ def _coerce_meeting_date(*, article_time: str | None, statement_url: str) -> str
 
 
 def _extract_vote_tally(content: str) -> str | None:
+    # Modern format: numeric tally embedded in text ("12 – 0 vote" / "vote of 8-4")
     for pattern in VOTE_TALLY_PATTERNS:
         match = pattern.search(content)
         if match is not None:
             return f"{match.group('for_votes')}-{match.group('against_votes')}"
+
+    # Older format: members listed by name, separated by semicolons.
+    # Count semicolons in the "Voting for" sentence (+1 = member count) then
+    # derive against = FOMC_COMMITTEE_SIZE - for_count.
+    for_match = VOTING_FOR_RE.search(content)
+    if for_match is not None:
+        for_count = for_match.group(1).count(";") + 1
+        against_count = FOMC_COMMITTEE_SIZE - for_count
+        if 0 <= against_count < FOMC_COMMITTEE_SIZE:
+            return f"{for_count}-{against_count}"
+
     return None
 
 

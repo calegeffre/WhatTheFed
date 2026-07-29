@@ -57,6 +57,20 @@ SAMPLE_DISSENT_HTML = """
 <div id="lastUpdate">Last Update: April 29, 2026</div>
 """.strip()
 
+SAMPLE_NAMED_VOTE_HTML = """
+<div id="article">
+  <div class="heading col-xs-12 col-sm-8 col-md-8">
+    <p class="article__time">December 11, 2024</p>
+    <h3 class="title">Federal Reserve issues FOMC statement</h3>
+  </div>
+  <div class="col-xs-12 col-sm-8 col-md-8">
+    <p>The Committee decided to maintain the target range for the federal funds rate.</p>
+    <p>Voting for the monetary policy action were Jerome H. Powell, Chair; John C. Williams, Vice Chair; Michael S. Barr; Michelle W. Bowman; Susan M. Collins; Lisa D. Cook; Philip N. Jefferson; Adriana D. Kugler; Alberto G. Musalem; Austin Goolsbee; and Christopher J. Waller. Voting against this action were Beth M. Hammack, who preferred to maintain the target range.</p>
+  </div>
+</div>
+<div id="lastUpdate">Last Update: December 11, 2024</div>
+""".strip()
+
 
 class FOMCIngestionTests(unittest.TestCase):
     def test_parse_calendar_statement_urls_orders_latest_first(self) -> None:
@@ -98,6 +112,29 @@ class FOMCIngestionTests(unittest.TestCase):
             self.assertEqual(documents[0].kind, "meeting_note")
             self.assertEqual(documents[0].meeting_date, "2026-06-17")
             self.assertEqual(documents[0].metadata.get("vote_tally"), "12-0")
+
+    def test_parse_statement_html_extracts_named_vote_tally(self) -> None:
+        """Older statement format lists member names instead of a numeric tally."""
+        statement = parse_statement_html(
+            f"{FOMC_BASE_URL}/newsevents/pressreleases/monetary20241211a.htm",
+            SAMPLE_NAMED_VOTE_HTML,
+        )
+        self.assertEqual(statement.vote_tally, "11-1")
+
+    def test_parse_statement_html_extracts_unanimous_named_vote(self) -> None:
+        """All 12 members voting for with no Voting-against sentence → 12-0."""
+        unanimous_html = SAMPLE_NAMED_VOTE_HTML.replace(
+            " Voting against this action were Beth M. Hammack, who preferred to maintain the target range.",
+            "",
+        ).replace(
+            "; Austin Goolsbee; and Christopher J. Waller.",
+            "; Austin Goolsbee; Christopher J. Waller; and Beth M. Hammack.</p>",
+        )
+        statement = parse_statement_html(
+            f"{FOMC_BASE_URL}/newsevents/pressreleases/monetary20241211a.htm",
+            unanimous_html,
+        )
+        self.assertEqual(statement.vote_tally, "12-0")
 
     def test_parse_statement_html_prefers_committee_decision_when_dissent_mentions_cut(self) -> None:
         statement = parse_statement_html(
