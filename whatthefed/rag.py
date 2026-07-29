@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable
+from typing import Iterable, Mapping
 
 
 TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9\-']*")
@@ -18,6 +18,9 @@ class Document:
     content: str
     kind: str
     meeting_date: str | None = None
+    published_at: str | None = None
+    source_url: str | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)
 
 
 def _tokenize(text: str) -> list[str]:
