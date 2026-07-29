@@ -1,15 +1,6 @@
 [
   {
     "provider": "kalshi_event",
-    "market_ref": "KXFEDDECISION-26JUL",
-    "target_meeting": "2026-07-29",
-    "source_url": "https://kalshi.com/markets/kxfeddecision/fed-meeting/kxfeddecision-26jul",
-    "metadata": {
-      "market_family": "kxfeddecision"
-    }
-  },
-  {
-    "provider": "kalshi_event",
     "market_ref": "KXFEDDECISION-26SEP",
     "target_meeting": "2026-09-16",
     "source_url": "https://kalshi.com/markets/kxfeddecision/fed-meeting/kxfeddecision-26sep",

@@ -969,7 +969,10 @@ def _choose_default_target_meeting(meetings: Iterable[str]) -> str:
         raise MarketIngestionError("No target meetings were available for dashboard export.")
     today = _utcnow().date().isoformat()
     for meeting in values:
-        if meeting >= today:
+        if meeting > today:
+            return meeting
+    for meeting in values:
+        if meeting == today:
             return meeting
     return values[-1]
 

@@ -472,10 +472,21 @@
       next_meeting_prediction: {
         decision: "raise",
         confidence: 0.9,
-        rationale: "fomc_2026_06: hawkish=2, dovish=0; jobs: hawkish=1, dovish=0; cpi: hawkish=1, dovish=0",
+        rationale: "fomc_2026_07: hawkish=2, dovish=0; jobs: hawkish=1, dovish=0; cpi: hawkish=1, dovish=0",
       },
-      evidence_sources: ["fomc_2026_06", "jobs", "cpi", "gdp"],
+      evidence_sources: ["fomc_2026_07", "jobs", "cpi", "gdp"],
       meeting_history: [
+        {
+          label: "July 2026",
+          date: "July 29, 2026",
+          decision: "hold",
+          official_vote: "9-3",
+          url: "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260729a.htm",
+          summary:
+            "The Committee maintained the target range at 3-1/2 to 3-3/4 percent, citing solid growth, strong productivity and investment, steady labor-market conditions, and still-elevated inflation.",
+          dissent_note: "Three dissenters preferred a 25 bp rate increase at this meeting.",
+          votes: ["hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "raise", "raise", "raise"],
+        },
         {
           label: "June 2026",
           date: "June 17, 2026",
@@ -537,10 +548,10 @@
       ],
       dashboard: {
         next_meeting_heat_map: [
-          { label: "Inflation Pressure", score: 5, tone: "hot", sources: ["fomc_2026_06", "cpi"] },
-          { label: "Labor Strength", score: 5, tone: "hot", sources: ["fomc_2026_06", "jobs"] },
+          { label: "Inflation Pressure", score: 5, tone: "hot", sources: ["fomc_2026_07", "cpi"] },
+          { label: "Labor Strength", score: 5, tone: "hot", sources: ["fomc_2026_07", "jobs"] },
           { label: "Growth Momentum", score: 2, tone: "cool", sources: ["jobs", "gdp"] },
-          { label: "Policy Bias", score: 4, tone: "warm", sources: ["fomc_2026_06", "cpi", "jobs"] },
+          { label: "Policy Bias", score: 4, tone: "warm", sources: ["fomc_2026_07", "cpi", "jobs"] },
         ],
       },
     };
@@ -858,6 +869,7 @@
       ["2026-03-18", 3.50, 3.75, "hold"],
       ["2026-04-29", 3.50, 3.75, "hold"],
       ["2026-06-17", 3.50, 3.75, "hold"],
+      ["2026-07-29", 3.50, 3.75, "hold"],
     ];
 
     function drawRateTimeline() {
