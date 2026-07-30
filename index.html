@@ -612,26 +612,26 @@
     })();
 
     const marketHeatCards = (() => {
-      if (!marketOverlay || !marketOverlay.blended_probabilities) return [];
-      const blended = normalizeTriplet(marketOverlay.blended_probabilities);
-      const labels = [
-        { key: "raise", title: "Market Raise Odds" },
-        { key: "hold", title: "Market Hold Odds" },
-        { key: "cut", title: "Market Cut Odds" },
-      ];
-      const providerNotes = Object.entries(marketOverlay.providers || {}).map(([provider, payload]) => {
-        const providerBlend = normalizeTriplet(payload.probabilities || {});
-        return { provider, probs: providerBlend };
-      });
-      return labels.map((item) => {
-        const score = scoreFromProbability(blended[item.key]);
+      if (!marketOverlay || !marketOverlay.providers) return [];
+      const toneFromDecision = { raise: "hot", hold: "balanced", cut: "cold" };
+      const decisionArrow   = { raise: "↑", hold: "→", cut: "↓" };
+      return Object.entries(marketOverlay.providers).map(([provider, payload]) => {
+        const probs = normalizeTriplet(payload.probabilities || {});
+        const [topDecision] = Object.entries(probs).sort((a, b) => b[1] - a[1])[0];
+        const topPct = probs[topDecision];
+        const tone = toneFromDecision[topDecision] ?? "balanced";
+        const name = provider.charAt(0).toUpperCase() + provider.slice(1);
         return {
-          label: item.title,
-          score,
-          tone: toneFromScore(score),
+          label: name,
+          display: formatPct(topPct),
+          toneLabel: topDecision,
+          score: scoreFromProbability(topPct),
+          tone,
           sources: [
+            `${decisionArrow.raise} Raise ${formatPct(probs.raise)}`,
+            `${decisionArrow.hold} Hold ${formatPct(probs.hold)}`,
+            `${decisionArrow.cut} Cut ${formatPct(probs.cut)}`,
             `target ${marketOverlay.target_meeting}`,
-            ...providerNotes.map((note) => `${note.provider}: ${formatPct(note.probs[item.key])}`),
           ],
         };
       });
@@ -686,8 +686,8 @@
       card.className = `heat-cell heat-${item.tone}`;
       card.innerHTML = `
         <div class="eyebrow">${item.label}</div>
-        <div class="heat-score">${item.score}/5</div>
-        <div>${item.tone}</div>
+        <div class="heat-score">${item.display ?? (item.score + "/5")}</div>
+        <div>${item.toneLabel ?? item.tone}</div>
         <div class="source-list">${item.sources.map((source) => `<span class="source-pill">${source}</span>`).join("")}</div>
       `;
       heatMap.appendChild(card);
