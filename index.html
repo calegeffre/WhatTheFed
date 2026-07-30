@@ -415,6 +415,14 @@
       border-radius: 12px;
     }
   </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.min.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <main class="page">
@@ -447,7 +455,7 @@
         <svg id="rate-chart" class="viz-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div id="viz-panel-knowledge-graph" class="viz-panel">
-        <svg id="kg-chart" class="viz-chart" viewBox="0 0 600 370" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="kg-canvas" class="viz-chart" style="height:460px;position:relative;overflow:hidden;"></div>
       </div>
     </section>
 
@@ -934,86 +942,9 @@
       svg.appendChild(svgEl("text", { x: -(P.t + CH / 2), y: 13, transform: "rotate(-90)", "text-anchor": "middle", fill: "rgba(200,210,225,0.35)", "font-size": 10 }, "Fed Funds Rate"));
     }
 
+    // Stub — real implementation provided by the Three.js module below
     function drawKnowledgeGraph() {
-      const svg = document.getElementById("kg-chart");
-      if (!svg) return;
-      svg.innerHTML = "";
-
-      const TONE_COLOR = { hot: "#ff7b72", warm: "#ffa657", balanced: "#8dc8ff", cool: "#79c0ff", cold: "#58a6ff" };
-      const fomcData = window.__FOMC_DASHBOARD_DATA__;
-      const mktData = window.__MARKET_DASHBOARD_DATA__;
-
-      const signals = fomcData?.signals ?? dashboardData.dashboard.next_meeting_heat_map.map((c) => ({
-        label: c.label, score: c.score, tone: c.tone, mentions: 0,
-      }));
-      const meetingLabel = fomcData?.meeting_label ?? "FOMC Statement";
-      const meetingDate = fomcData?.meeting_date ?? "";
-
-      // ── FOMC cluster ────────────────────────────────────────────
-      svg.appendChild(svgEl("text", { x: 8, y: 14, fill: "rgba(200,210,225,0.35)", "font-size": 8.5, "font-weight": 700, "letter-spacing": "0.09em" }, "FOMC SIGNALS"));
-
-      const SRC_X = 52, SRC_Y = 108;
-      const SIG_X = 240, BAR_X = 278, BAR_W = 180;
-      const sigStep = 168 / Math.max(1, signals.length - 1);
-
-      svg.appendChild(svgEl("circle", { cx: SRC_X, cy: SRC_Y, r: 34, fill: "rgba(141,200,255,0.12)", stroke: "#8dc8ff", "stroke-width": 1.5 }));
-      svg.appendChild(svgEl("text", { x: SRC_X, y: SRC_Y - 10, "text-anchor": "middle", fill: "#8dc8ff", "font-size": 8.5, "font-weight": 600 }, meetingLabel));
-      svg.appendChild(svgEl("text", { x: SRC_X, y: SRC_Y + 4, "text-anchor": "middle", fill: "rgba(200,210,225,0.4)", "font-size": 8 }, meetingDate));
-      svg.appendChild(svgEl("text", { x: SRC_X, y: SRC_Y + 17, "text-anchor": "middle", fill: "rgba(200,210,225,0.25)", "font-size": 7.5 }, "Statement"));
-
-      signals.forEach((sig, i) => {
-        const sy = 24 + i * sigStep;
-        const color = TONE_COLOR[sig.tone] ?? "#8dc8ff";
-        const mx = (SRC_X + 34 + SIG_X - 26) / 2, my = (SRC_Y + sy) / 2;
-        svg.appendChild(svgEl("line", { x1: SRC_X + 34, y1: SRC_Y, x2: SIG_X - 26, y2: sy, stroke: "rgba(141,200,255,0.18)", "stroke-width": 1 }));
-        if (sig.mentions > 0) svg.appendChild(svgEl("text", { x: mx, y: my - 4, "text-anchor": "middle", fill: "rgba(200,210,225,0.28)", "font-size": 7.5 }, `${sig.mentions}×`));
-
-        svg.appendChild(svgEl("circle", { cx: SIG_X, cy: sy, r: 26, fill: "rgba(141,200,255,0.07)", stroke: color, "stroke-width": 1.5 }));
-        const words = sig.label.split(" ");
-        const [w1, w2] = [words.slice(0, 2).join(" "), words.slice(2).join(" ")];
-        svg.appendChild(svgEl("text", { x: SIG_X, y: sy + (w2 ? -5 : 4), "text-anchor": "middle", fill: "#ccd6f6", "font-size": 7.5, "font-weight": 500 }, w1));
-        if (w2) svg.appendChild(svgEl("text", { x: SIG_X, y: sy + 7, "text-anchor": "middle", fill: "#ccd6f6", "font-size": 7.5, "font-weight": 500 }, w2));
-
-        svg.appendChild(svgEl("line", { x1: SIG_X + 26, y1: sy, x2: BAR_X, y2: sy, stroke: "rgba(141,200,255,0.12)", "stroke-width": 1 }));
-        const filled = Math.max(0, (sig.score / 5) * BAR_W);
-        svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: BAR_W, height: 8, rx: 4, fill: "rgba(255,255,255,0.05)" }));
-        svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: filled, height: 8, rx: 4, fill: color, opacity: 0.75 }));
-        svg.appendChild(svgEl("text", { x: BAR_X + BAR_W + 7, y: sy + 4, fill: color, "font-size": 9, "font-weight": 600 }, `${sig.score}/5`));
-      });
-
-      // ── Market cluster ──────────────────────────────────────────
-      const DIV_Y = 220;
-      svg.appendChild(svgEl("line", { x1: 0, y1: DIV_Y, x2: 600, y2: DIV_Y, stroke: "rgba(141,200,255,0.07)", "stroke-width": 1 }));
-      svg.appendChild(svgEl("text", { x: 8, y: DIV_Y + 18, fill: "rgba(200,210,225,0.35)", "font-size": 8.5, "font-weight": 700, "letter-spacing": "0.09em" }, "MARKET SIGNALS"));
-
-      const MKT_X = 52, MKT_Y = 305;
-      svg.appendChild(svgEl("circle", { cx: MKT_X, cy: MKT_Y, r: 28, fill: "rgba(121,192,255,0.1)", stroke: "#79c0ff", "stroke-width": 1.5 }));
-      svg.appendChild(svgEl("text", { x: MKT_X, y: MKT_Y - 7, "text-anchor": "middle", fill: "#79c0ff", "font-size": 9, "font-weight": 600 }, "Kalshi"));
-      svg.appendChild(svgEl("text", { x: MKT_X, y: MKT_Y + 6, "text-anchor": "middle", fill: "rgba(200,210,225,0.35)", "font-size": 7.5 }, mktData?.target_meeting ?? "—"));
-      svg.appendChild(svgEl("text", { x: MKT_X, y: MKT_Y + 18, "text-anchor": "middle", fill: "rgba(200,210,225,0.22)", "font-size": 7 }, "Markets"));
-
-      if (mktData?.blended_probabilities) {
-        const bp = mktData.blended_probabilities;
-        const tot = (bp.raise ?? 0) + (bp.hold ?? 0) + (bp.cut ?? 0);
-        const norm = (v) => (tot > 0 ? v / tot : 0);
-        [{ key: "hold", label: "Hold", color: "#8dc8ff" }, { key: "cut", label: "Cut", color: "#58a6ff" }, { key: "raise", label: "Raise", color: "#ff7b72" }]
-          .forEach(({ key, label, color }, j) => {
-            const sy = MKT_Y - 48 + j * 48;
-            const pct = norm(bp[key] ?? 0);
-            const pctTxt = Math.round(pct * 100) + "%";
-            svg.appendChild(svgEl("line", { x1: MKT_X + 28, y1: MKT_Y, x2: SIG_X - 20, y2: sy, stroke: "rgba(141,200,255,0.18)", "stroke-width": 1 }));
-            svg.appendChild(svgEl("circle", { cx: SIG_X, cy: sy, r: 20, fill: "rgba(141,200,255,0.06)", stroke: color, "stroke-width": 1.5 }));
-            svg.appendChild(svgEl("text", { x: SIG_X, y: sy - 4, "text-anchor": "middle", fill: "#ccd6f6", "font-size": 7.5 }, label));
-            svg.appendChild(svgEl("text", { x: SIG_X, y: sy + 7, "text-anchor": "middle", fill: color, "font-size": 9, "font-weight": 600 }, pctTxt));
-            svg.appendChild(svgEl("line", { x1: SIG_X + 20, y1: sy, x2: BAR_X, y2: sy, stroke: "rgba(141,200,255,0.12)", "stroke-width": 1 }));
-            const filled = pct * BAR_W;
-            svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: BAR_W, height: 8, rx: 4, fill: "rgba(255,255,255,0.05)" }));
-            svg.appendChild(svgEl("rect", { x: BAR_X, y: sy - 4, width: filled, height: 8, rx: 4, fill: color, opacity: 0.75 }));
-            svg.appendChild(svgEl("text", { x: BAR_X + BAR_W + 7, y: sy + 4, fill: color, "font-size": 9, "font-weight": 600 }, pctTxt));
-          });
-      } else {
-        svg.appendChild(svgEl("text", { x: 300, y: MKT_Y, "text-anchor": "middle", fill: "rgba(200,210,225,0.22)", "font-size": 11 }, "Run market ingestion to view live odds"));
-      }
+      if (typeof window._kgInit === "function") window._kgInit();
     }
 
     function initVizTabs() {
@@ -1032,6 +963,202 @@
     }
 
     initVizTabs();
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+    (function () {
+      const TONE_HEX = { hot: 0xff7b72, warm: 0xffa657, balanced: 0x8dc8ff, cool: 0x79c0ff, cold: 0x58a6ff };
+      let state = null;
+
+      function dispose() {
+        if (!state) return;
+        cancelAnimationFrame(state.animId);
+        state.controls.dispose();
+        state.renderer.dispose();
+        if (state.ro) state.ro.disconnect();
+        const c = document.getElementById("kg-canvas");
+        if (c) c.innerHTML = "";
+        state = null;
+      }
+
+      function makeNode(scene, x, y, z, hexColor, radius, label, sublabel) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        scene.add(group);
+
+        const mat = new THREE.MeshLambertMaterial({
+          color: hexColor, transparent: true, opacity: 0.88,
+          emissive: hexColor, emissiveIntensity: 0.07,
+        });
+        group.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), mat));
+
+        group.add(new THREE.Mesh(
+          new THREE.SphereGeometry(radius * 1.45, 10, 5),
+          new THREE.MeshBasicMaterial({ color: hexColor, transparent: true, opacity: 0.07, wireframe: true }),
+        ));
+
+        const lDiv = document.createElement("div");
+        lDiv.style.cssText = `font-size:11px;font-weight:600;color:#ccd6f6;padding:2px 8px;
+          background:rgba(8,17,31,0.78);border-radius:4px;white-space:nowrap;
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;`;
+        lDiv.textContent = label;
+        const lObj = new CSS2DObject(lDiv);
+        lObj.position.set(0, radius + 0.28, 0);
+        group.add(lObj);
+
+        if (sublabel) {
+          const sDiv = document.createElement("div");
+          sDiv.style.cssText = `font-size:9px;font-weight:500;color:#${hexColor.toString(16).padStart(6,"0")};
+            padding:1px 5px;background:rgba(8,17,31,0.65);border-radius:3px;white-space:nowrap;
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;margin-top:1px;`;
+          sDiv.textContent = sublabel;
+          const sObj = new CSS2DObject(sDiv);
+          sObj.position.set(0, radius + 0.68, 0);
+          group.add(sObj);
+        }
+        return group;
+      }
+
+      function addEdge(scene, from, to, hexColor, opacity) {
+        scene.add(new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...from), new THREE.Vector3(...to)]),
+          new THREE.LineBasicMaterial({ color: hexColor, transparent: true, opacity: opacity ?? 0.25 }),
+        ));
+      }
+
+      function buildGraph(scene) {
+        const fomcData = window.__FOMC_DASHBOARD_DATA__;
+        const mktData  = window.__MARKET_DASHBOARD_DATA__;
+
+        const signals = fomcData?.signals ?? [
+          { label: "Inflation Pressure", score: 5, tone: "hot",      mentions: 4 },
+          { label: "Labor Strength",     score: 3, tone: "balanced", mentions: 3 },
+          { label: "Growth Momentum",    score: 4, tone: "warm",     mentions: 4 },
+          { label: "Policy Bias",        score: 5, tone: "hot",      mentions: 6 },
+        ];
+        const meetingLabel = fomcData?.meeting_label ?? "FOMC Statement";
+        const decision     = fomcData?.decision?.toUpperCase() ?? "HOLD";
+        const voteTally    = fomcData?.vote_tally ?? "";
+        const decisionStr  = voteTally ? `${decision}  ${voteTally}` : decision;
+
+        // ── FOMC hub ─────────────────────────────────────────────
+        const HUB_Y = 1.0;
+        makeNode(scene, 0, HUB_Y, 0, 0x8dc8ff, 0.56, meetingLabel, decisionStr);
+
+        // ── Signal ring ──────────────────────────────────────────
+        const SIG_R = 3.4;
+        signals.forEach((sig, i) => {
+          const angle = (i / signals.length) * Math.PI * 2 - Math.PI / 2;
+          const sx = Math.cos(angle) * SIG_R, sz = Math.sin(angle) * SIG_R;
+          const color = TONE_HEX[sig.tone] ?? 0x8dc8ff;
+          const r = 0.22 + (sig.score / 5) * 0.26;
+          makeNode(scene, sx, HUB_Y, sz, color, r, sig.label, `${sig.mentions}×  ·  ${sig.score}/5`);
+          addEdge(scene, [0, HUB_Y, 0], [sx, HUB_Y, sz], color, 0.22);
+        });
+
+        // ── Market hub ───────────────────────────────────────────
+        const MKT_Y = -2.2;
+        const targetLabel = mktData?.target_meeting
+          ? `Sep ${mktData.target_meeting.slice(0, 4)}`
+          : "Sep 2026";
+        makeNode(scene, 0, MKT_Y, 0, 0x79c0ff, 0.4, "Markets", targetLabel);
+
+        // Spine connecting FOMC to Market hub
+        addEdge(scene, [0, HUB_Y, 0], [0, MKT_Y, 0], 0x4a5568, 0.35);
+
+        // ── Market outcome ring ───────────────────────────────────
+        if (mktData?.blended_probabilities) {
+          const bp  = mktData.blended_probabilities;
+          const tot = (bp.raise ?? 0) + (bp.hold ?? 0) + (bp.cut ?? 0);
+          const norm = (v) => (tot > 0 ? v / tot : 0);
+          [
+            { key: "raise", label: "Raise", color: 0xff7b72 },
+            { key: "hold",  label: "Hold",  color: 0x8dc8ff },
+            { key: "cut",   label: "Cut",   color: 0x58a6ff },
+          ].forEach(({ key, label, color }, i) => {
+            const pct   = norm(bp[key] ?? 0);
+            const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
+            const mx = Math.cos(angle) * 2.2, mz = Math.sin(angle) * 2.2;
+            const r  = 0.14 + pct * 0.52;
+            makeNode(scene, mx, MKT_Y, mz, color, r, label, `${Math.round(pct * 100)}%`);
+            addEdge(scene, [0, MKT_Y, 0], [mx, MKT_Y, mz], color, 0.22);
+          });
+        }
+
+        // ── Reference grid ────────────────────────────────────────
+        const grid = new THREE.GridHelper(12, 12, 0x203250, 0x121f30);
+        grid.position.y = -3.3;
+        scene.add(grid);
+      }
+
+      function init() {
+        const container = document.getElementById("kg-canvas");
+        if (!container) return;
+        dispose();
+
+        const W = container.clientWidth  || 700;
+        const H = container.clientHeight || 460;
+
+        const scene    = new THREE.Scene();
+        scene.background = new THREE.Color(0x08111f);
+        scene.fog        = new THREE.FogExp2(0x08111f, 0.052);
+
+        const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 100);
+        camera.position.set(0, 3.5, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(W, H);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(W, H);
+        labelRenderer.domElement.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;";
+        container.appendChild(labelRenderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+        dir.position.set(5, 8, 5);
+        scene.add(dir);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping   = true;
+        controls.dampingFactor   = 0.06;
+        controls.autoRotate      = true;
+        controls.autoRotateSpeed = 0.5;
+        controls.minDistance     = 4;
+        controls.maxDistance     = 22;
+
+        buildGraph(scene);
+
+        let animId;
+        function animate() {
+          animId = requestAnimationFrame(animate);
+          controls.update();
+          renderer.render(scene, camera);
+          labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        // Keep canvas sized to container on resize
+        const ro = new ResizeObserver(() => {
+          const nW = container.clientWidth;
+          const nH = container.clientHeight || 460;
+          renderer.setSize(nW, nH);
+          labelRenderer.setSize(nW, nH);
+          camera.aspect = nW / nH;
+          camera.updateProjectionMatrix();
+        });
+        ro.observe(container);
+
+        state = { renderer, labelRenderer, scene, camera, controls, animId, ro };
+      }
+
+      window._kgInit = init;
+    })();
   </script>
 </body>
 </html>
