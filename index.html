@@ -559,7 +559,7 @@
           { label: "Inflation Pressure", score: 5, tone: "hot", sources: ["fomc_2026_07", "cpi"] },
           { label: "Labor Strength", score: 5, tone: "hot", sources: ["fomc_2026_07", "jobs"] },
           { label: "Growth Momentum", score: 2, tone: "cool", sources: ["jobs", "gdp"] },
-          { label: "Policy Bias", score: 4, tone: "warm", sources: ["fomc_2026_07", "cpi", "jobs"] },
+          { label: "Previous Meeting Bias", score: 4, tone: "warm", sources: ["fomc_2026_07", "cpi", "jobs"] },
         ],
       },
     };
@@ -643,9 +643,11 @@
       }
       return fomcOverlay.signals.map((signal) => {
         const score = Math.max(1, Math.min(5, Number(signal?.score || 3)));
+        const rawLabel = String(signal?.label || "FOMC Signal");
         return {
-          label: String(signal?.label || "FOMC Signal"),
+          label: rawLabel === "Policy Bias" ? "Previous Meeting Bias" : rawLabel,
           score,
+          display: signal?.display ?? undefined,
           tone: String(signal?.tone || toneFromScore(score)),
           sources: Array.isArray(signal?.sources) ? signal.sources.map((source) => String(source)) : [],
         };
@@ -1037,7 +1039,7 @@
           { label: "Inflation Pressure", score: 5, tone: "hot",      mentions: 4 },
           { label: "Labor Strength",     score: 3, tone: "balanced", mentions: 3 },
           { label: "Growth Momentum",    score: 4, tone: "warm",     mentions: 4 },
-          { label: "Policy Bias",        score: 5, tone: "hot",      mentions: 6 },
+          { label: "Previous Meeting Bias", score: 5, tone: "hot",   mentions: 6 },
         ];
         const meetingLabel = fomcData?.meeting_label ?? "FOMC Statement";
         const decision     = fomcData?.decision?.toUpperCase() ?? "HOLD";

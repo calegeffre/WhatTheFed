@@ -50,7 +50,7 @@ class FedRAGAnalyzer:
         ("Inflation Pressure", ("inflation", "tight"), ("disinflation",)),
         ("Labor Strength", ("resilient", "strong labor", "hiring"), ("weak", "softening")),
         ("Growth Momentum", ("growth", "resilient"), ("slowdown", "recession", "softening")),
-        ("Policy Bias", ("tight", "inflation", "resilient"), ("disinflation", "recession", "weak")),
+        ("Previous Meeting Bias", ("tight", "inflation", "resilient"), ("disinflation", "recession", "weak")),
     )
     RAISE_THRESHOLD = 2
     CUT_THRESHOLD = -2

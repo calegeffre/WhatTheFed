@@ -79,8 +79,10 @@ FOMC_SIGNAL_LABELS = (
     ("inflation_mentions", "Inflation Pressure"),
     ("labor_mentions", "Labor Strength"),
     ("growth_mentions", "Growth Momentum"),
-    ("policy_mentions", "Policy Bias"),
 )
+
+_DISSENT_RAISE_RE = re.compile(r"preferred\s+to\s+(?:raise|increase|tighten)", re.I)
+_DISSENT_CUT_RE = re.compile(r"preferred\s+to\s+(?:reduce|lower|decrease|ease|cut)", re.I)
 
 TextFetcher = Callable[[str], str]
 
@@ -494,7 +496,7 @@ def build_dashboard_fomc_payload(
             row = connection.execute(
                 """
                 SELECT meeting_date, statement_url, title, vote_tally, decision, summary, fetched_at,
-                       inflation_mentions, labor_mentions, growth_mentions, policy_mentions
+                       inflation_mentions, labor_mentions, growth_mentions, content
                 FROM fomc_statements
                 WHERE meeting_date = ?
                 ORDER BY fetched_at DESC
@@ -506,7 +508,7 @@ def build_dashboard_fomc_payload(
             row = connection.execute(
                 """
                 SELECT meeting_date, statement_url, title, vote_tally, decision, summary, fetched_at,
-                       inflation_mentions, labor_mentions, growth_mentions, policy_mentions
+                       inflation_mentions, labor_mentions, growth_mentions, content
                 FROM fomc_statements
                 ORDER BY meeting_date DESC, fetched_at DESC
                 LIMIT 1
@@ -522,8 +524,8 @@ def build_dashboard_fomc_payload(
         "inflation_mentions": int(row["inflation_mentions"] or 0),
         "labor_mentions": int(row["labor_mentions"] or 0),
         "growth_mentions": int(row["growth_mentions"] or 0),
-        "policy_mentions": int(row["policy_mentions"] or 0),
     }
+    # Previous Meeting Bias is handled separately; the 3 economic signals are normalized against each other
     max_mentions = max(raw_signal_counts.values()) if raw_signal_counts else 0
     source_id = f"fomc_{str(row['meeting_date']).replace('-', '_')}"
 
@@ -540,6 +542,16 @@ def build_dashboard_fomc_payload(
                 "sources": [source_id, f"mentions:{mentions}"],
             }
         )
+
+    # Previous Meeting Bias: derived from decision direction + dissenter pull, not term counting
+    signals.append(
+        _compute_policy_bias(
+            decision=str(row["decision"] or "hold"),
+            vote_tally=row["vote_tally"],
+            content=str(row["content"] or ""),
+            source_id=source_id,
+        )
+    )
 
     return {
         "generated_at": _utcnow().isoformat(),
@@ -572,6 +584,67 @@ def _tone_from_score(score: int) -> str:
     if score == 2:
         return "cool"
     return "cold"
+
+
+def _compute_policy_bias(
+    *,
+    decision: str,
+    vote_tally: str | None,
+    content: str,
+    source_id: str,
+) -> dict[str, object]:
+    """
+    Score policy bias on [-1.0, +1.0]:
+      base = raise → +1, hold → 0, cut → -1
+      pull = (raise_dissenters - cut_dissenters) / COMMITTEE_SIZE
+
+    Mapped to heat score 1-5: -1→1, 0→3, +1→5.
+    """
+    COMMITTEE_SIZE = 12
+    base = {"raise": 1.0, "hold": 0.0, "cut": -1.0}.get(decision, 0.0)
+
+    minority = 0
+    if vote_tally:
+        m = re.search(r"\d+\s*[-\u2013]\s*(\d+)", vote_tally)
+        if m:
+            minority = int(m.group(1))
+
+    pull = 0.0
+    if minority > 0:
+        has_raise = bool(_DISSENT_RAISE_RE.search(content))
+        has_cut = bool(_DISSENT_CUT_RE.search(content))
+        if has_raise and not has_cut:
+            pull = minority / COMMITTEE_SIZE
+        elif has_cut and not has_raise:
+            pull = -(minority / COMMITTEE_SIZE)
+        # mixed / unknown → pull stays 0
+
+    bias = round(min(1.0, max(-1.0, base + pull)), 2)
+
+    if bias >= 0.75:
+        tone = "hot"
+    elif bias >= 0.25:
+        tone = "warm"
+    elif bias > -0.25:
+        tone = "balanced"
+    elif bias >= -0.75:
+        tone = "cool"
+    else:
+        tone = "cold"
+
+    # Align heat score directly to tone so color and number stay consistent
+    heat = {"hot": 5, "warm": 4, "balanced": 3, "cool": 2, "cold": 1}[tone]
+
+    sign = "+" if bias > 0 else ""
+    label = f"{sign}{bias}"
+    return {
+        "label": "Previous Meeting Bias",
+        "score": heat,
+        "display": label,
+        "tone": tone,
+        "mentions": 0,
+        "sources": [source_id, f"decision:{decision}", f"bias:{label}"],
+    }
 
 
 def _meeting_label_from_iso(value: str) -> str:
