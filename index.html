@@ -45,7 +45,7 @@
 
     .hero {
       display: grid;
-      gap: 24px;
+      gap: 10px;
       margin-bottom: 24px;
     }
 
@@ -57,22 +57,12 @@
       margin-bottom: 10px;
     }
 
-    .hero-grid {
-      display: grid;
-      gap: 20px;
-    }
-
-    .hero-grid {
-      grid-template-columns: 1.2fr 1fr;
-      align-items: start;
-    }
-
     .prediction-card {
       padding: 18px;
       border-radius: 18px;
       background: linear-gradient(135deg, rgba(141, 200, 255, 0.14), rgba(255, 255, 255, 0.04));
       border: 1px solid rgba(141, 200, 255, 0.2);
-      margin-top: 18px;
+      margin-top: 8px;
     }
 
     .prediction-row {
@@ -130,8 +120,9 @@
 
     .heat-map {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 14px;
+      margin-top: 16px;
     }
 
     .heat-cell {
@@ -144,9 +135,24 @@
       align-content: start;
     }
 
+    .heat-cell .eyebrow {
+      margin-bottom: 0;
+    }
+
+    .heat-cell .source-list {
+      margin-top: 6px;
+      gap: 6px;
+    }
+
+    .heat-cell .source-pill {
+      font-size: 11px;
+      padding: 4px 9px;
+    }
+
     .heat-score {
-      font-size: 32px;
+      font-size: 30px;
       font-weight: bold;
+      line-height: 1.1;
     }
 
     .heat-hot { background: rgba(255, 107, 107, 0.18); }
@@ -361,13 +367,21 @@
       background: rgba(123, 211, 137, 0.9);
     }
 
-    @media (max-width: 920px) {
-      .hero-grid,
+    @media (max-width: 1080px) {
       .heat-map {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+    }
+
+    @media (max-width: 920px) {
       .timeline-votes-grid {
         grid-template-columns: repeat(2, minmax(120px, 1fr));
+      }
+    }
+
+    @media (max-width: 600px) {
+      .heat-map {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -452,6 +466,40 @@
       color: var(--muted);
       font-size: 13px;
     }
+    .kg-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+    @media (max-width: 760px) {
+      .kg-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .kg-tab {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(141, 200, 255, 0.2);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .kg-tab:hover {
+      background: rgba(141, 200, 255, 0.1);
+      color: var(--text);
+      border-color: rgba(141, 200, 255, 0.35);
+    }
+    .kg-tab.kg-tab-active {
+      background: rgba(141, 200, 255, 0.18);
+      color: #8dc8ff;
+      border-color: rgba(141, 200, 255, 0.5);
+      font-weight: 600;
+    }
   </style>
   <script type="importmap">
   {
@@ -466,21 +514,22 @@
   <main class="page">
     <section class="hero">
       <div class="eyebrow">WhatTheFed</div>
-      <div class="hero-grid">
-        <div>
-          <h1>Next Meeting Heat Map</h1>
-          <p id="summary" class="note"></p>
-          <div class="prediction-card">
-            <div class="prediction-row">
-              <h2 id="prediction-title"></h2>
-              <span id="confidence" class="pill"></span>
-            </div>
-            <p id="rationale" class="note"></p>
-            <div id="sources" class="source-list"></div>
-          </div>
+      <h1>Next Meeting Heat Map</h1>
+      <p id="summary" class="note"></p>
+      <div class="prediction-card">
+        <div class="prediction-row">
+          <h2 id="prediction-title"></h2>
+          <span id="confidence" class="pill"></span>
         </div>
-        <div id="heat-map" class="heat-map"></div>
+        <p id="rationale" class="note"></p>
+        <div id="sources" class="source-list"></div>
       </div>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">Data at a glance</div>
+      <p class="note">Every signal feeding the prediction above, grouped by source: FOMC statement, inflation, labor, and prediction markets.</p>
+      <div id="heat-map" class="heat-map"></div>
     </section>
 
     <section class="section">
@@ -494,7 +543,17 @@
         <svg id="rate-chart" class="viz-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div id="viz-panel-knowledge-graph" class="viz-panel">
-        <div id="kg-canvas" class="viz-chart" style="height:460px;position:relative;overflow:hidden;"></div>
+        <div class="kg-tabs">
+          <button class="kg-tab kg-tab-active" data-kg-exp="experiment-1">Experiment 1 · Bias Gradient</button>
+          <button class="kg-tab" data-kg-exp="experiment-2">Experiment 2 · Source Clusters</button>
+          <button class="kg-tab" data-kg-exp="experiment-3">Experiment 3 · Timeline Lanes</button>
+          <button class="kg-tab" data-kg-exp="experiment-4">Experiment 4 · Contribution Sunburst</button>
+          <button class="kg-tab" data-kg-exp="experiment-5">Experiment 5 · Correlation Web</button>
+          <button class="kg-tab" data-kg-exp="experiment-6">Experiment 6 · Decision Funnel</button>
+          <button class="kg-tab" data-kg-exp="experiment-7">Experiment 7 · Monte Carlo Cloud</button>
+          <button class="kg-tab" data-kg-exp="experiment-8">Experiment 8 · Sensitivity Tornado</button>
+        </div>
+        <div id="kg-canvas" class="viz-chart" style="height:540px;position:relative;overflow:hidden;"></div>
       </div>
       <div id="viz-panel-raw-data" class="viz-panel">
         <div id="raw-data-wrap" class="raw-data-wrap"></div>
@@ -518,6 +577,8 @@
     window.__LABOR_DASHBOARD_DATA__ = window.__LABOR_DASHBOARD_DATA__ || null;
     window.__LABOR_KG_DASHBOARD_DATA__ = window.__LABOR_KG_DASHBOARD_DATA__ || null;
     window.__TREASURY_DASHBOARD_DATA__ = window.__TREASURY_DASHBOARD_DATA__ || null;
+    window.__KG_EXPERIMENT__ = window.__KG_EXPERIMENT__ || "experiment-1";
+    window.__KG_MEETING_OFFSET__ = window.__KG_MEETING_OFFSET__ || 0;
   </script>
   <script src="data/fomc_dashboard_data.js"></script>
   <script src="data/fomc_history_data.js"></script>
@@ -1022,7 +1083,7 @@
 
     // Stub — real implementation provided by the Three.js module below
     function drawKnowledgeGraph() {
-      if (typeof window._kgInit === "function") window._kgInit();
+      if (typeof window._kgInit === "function") window._kgInit(window.__KG_EXPERIMENT__ || "experiment-1");
     }
 
     function fmtNumber(value, digits = 3) {
@@ -1288,6 +1349,20 @@
       `;
     }
 
+    function initKgExperimentTabs() {
+      const buttons = document.querySelectorAll(".kg-tab");
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          buttons.forEach((item) => item.classList.remove("kg-tab-active"));
+          button.classList.add("kg-tab-active");
+          window.__KG_EXPERIMENT__ = button.dataset.kgExp || "experiment-1";
+          if (document.getElementById("viz-panel-knowledge-graph")?.classList.contains("viz-panel-active")) {
+            drawKnowledgeGraph();
+          }
+        });
+      });
+    }
+
     function initVizTabs() {
       const tabBtns = document.querySelectorAll(".viz-tab");
       tabBtns.forEach((btn) => {
@@ -1305,6 +1380,7 @@
       drawRawDataTable();
     }
 
+    initKgExperimentTabs();
     initVizTabs();
   </script>
   <script type="module">
@@ -1314,6 +1390,69 @@
 
     (function () {
       const TONE_HEX = { hot: 0xff7b72, warm: 0xffa657, balanced: 0x8dc8ff, cool: 0x79c0ff, cold: 0x58a6ff };
+
+      const BIAS_SCALE_BAR =
+        '<span style="display:inline-block;width:84px;height:7px;border-radius:4px;vertical-align:middle;' +
+        'background:linear-gradient(90deg,#64ff64,#ffffff,#ff5a5a);"></span>';
+
+      const EXPERIMENT_VIEWS = {
+        "experiment-1": {
+          camera: [0, 3.4, 13.5],
+          target: [0, 1.2, 0],
+          distance: [5, 28],
+          chainY: 5.4,
+          legend: `Layout: x-axis = policy bias. ${BIAS_SCALE_BAR} lower → hold → raise. Size = signal weight × |bias|. Drop lines tie each node to the bias axis.`,
+        },
+        "experiment-2": {
+          camera: [0, 6.4, 16.5],
+          target: [0, 1.6, 0],
+          distance: [6, 34],
+          chainY: 7.4,
+          legend: `Layout: one cluster per source on a shared ring. Size = category relevance to Fed policy. ${BIAS_SCALE_BAR} colour = that chunk's share of its domain bias.`,
+        },
+        "experiment-3": {
+          camera: [0, 3.2, 17.0],
+          target: [0, 1.0, 0],
+          distance: [6, 36],
+          chainY: 6.2,
+          legend: "Layout: three time lanes (CPI / Labor / Treasury). x = time, z = normalised value, size = month-over-month move. The blue marker is the focused meeting date.",
+        },
+        "experiment-4": {
+          camera: [0, 7.6, 17.5],
+          target: [0, 1.6, 0],
+          distance: [7, 38],
+          chainY: 7.2,
+          legend: `Layout: sunburst of weight chunks — arc length = share of total decision weight, ring 1 = source, ring 2 = category chunk. ${BIAS_SCALE_BAR} colour = bias contribution.`,
+        },
+        "experiment-5": {
+          camera: [0, 4.6, 16.0],
+          target: [0, 1.2, 0],
+          distance: [6, 34],
+          chainY: 6.6,
+          legend: `Layout: force-relaxed correlation web. Edge = |corr| ≥ 0.55 of month-over-month changes (red = moves together, blue = moves opposite). Size = volatility. ${BIAS_SCALE_BAR} colour = recent trend direction.`,
+        },
+        "experiment-6": {
+          camera: [0, 4.2, 17.5],
+          target: [0, 0.6, 0],
+          distance: [6, 36],
+          chainY: 6.8,
+          legend: `Layout: decision funnel. Left = raw source chunks, middle = domains, right = outcome gates sized by probability. Strand count = flow volume; each domain splits across raise/hold/cut by the sign of its bias. ${BIAS_SCALE_BAR}`,
+        },
+        "experiment-7": {
+          camera: [0, 3.0, 16.5],
+          target: [0, -0.4, 0],
+          distance: [6, 36],
+          chainY: 6.4,
+          legend: `Layout: Monte Carlo scenario cloud. 520 seeded draws shock CPI, labor, curve and carry-over by their observed volatility; x = resulting bias, z = CPI shock, y = labor shock. ${BIAS_SCALE_BAR} colour = sampled decision. Bars = outcome frequency.`,
+        },
+        "experiment-8": {
+          camera: [0, 2.4, 15.5],
+          target: [0, 0.2, 0],
+          distance: [6, 34],
+          chainY: 6.0,
+          legend: `Layout: sensitivity tornado. Bar length = change in meeting bias per +0.25 move in that input (sorted by leverage). Left-hand markers show how far the input must move to flip the modal decision. ${BIAS_SCALE_BAR}`,
+        },
+      };
       let state = null;
 
       function dispose() {
@@ -1337,7 +1476,6 @@
           emissive: hexColor, emissiveIntensity: 0.07,
         });
         group.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), mat));
-
         group.add(new THREE.Mesh(
           new THREE.SphereGeometry(radius * 1.45, 10, 5),
           new THREE.MeshBasicMaterial({ color: hexColor, transparent: true, opacity: 0.07, wireframe: true }),
@@ -1374,210 +1512,1478 @@
         ));
       }
 
-      function parseHexColor(value, fallback = 0x8dc8ff) {
-        if (typeof value !== "string") return fallback;
-        const clean = value.trim().replace("#", "");
-        const parsed = Number.parseInt(clean, 16);
-        return Number.isFinite(parsed) ? parsed : fallback;
+      function clamp(value, low, high) {
+        return Math.max(low, Math.min(high, value));
       }
 
-      function addCpiKnowledgeGraph(scene) {
-        const kgData = window.__KG_DASHBOARD_DATA__;
-        const cpiGraph = kgData?.cpi_graph;
-        if (!cpiGraph || !Array.isArray(cpiGraph.nodes) || !cpiGraph.nodes.length) return;
-
-        const positions = new Map([["fomc-hub", [0, 1.0, 0]]]);
-        cpiGraph.nodes.forEach((node) => {
-          const x = Number(node?.x ?? 0);
-          const y = Number(node?.y ?? 0);
-          const z = Number(node?.z ?? 0);
-          const size = Math.max(0.03, Number(node?.size ?? 0.08));
-          const color = parseHexColor(node?.color, 0x8dc8ff);
-          const nodeKind = String(node?.kind || "");
-          const showLabel = nodeKind !== "cpi_observation";
-          makeNode(
-            scene,
-            x,
-            y,
-            z,
-            color,
-            size,
-            showLabel ? String(node?.label || "") : "",
-            showLabel ? String(node?.sublabel || "") : "",
-          );
-          positions.set(String(node?.id || ""), [x, y, z]);
-        });
-
-        if (!Array.isArray(cpiGraph.edges)) return;
-        cpiGraph.edges.forEach((edge) => {
-          const from = positions.get(String(edge?.source || ""));
-          const to = positions.get(String(edge?.target || ""));
-          if (!from || !to) return;
-          addEdge(
-            scene,
-            from,
-            to,
-            parseHexColor(edge?.color, 0x8dc8ff),
-            Number(edge?.opacity ?? 0.12),
-          );
-        });
+      function parseNumeric(value) {
+        if (typeof value === "number") return Number.isFinite(value) ? value : null;
+        if (typeof value !== "string") return null;
+        const cleaned = value.replace(/[^0-9.\-+]/g, "");
+        const parsed = Number(cleaned);
+        return Number.isFinite(parsed) ? parsed : null;
       }
 
-      function addLaborKnowledgeGraph(scene) {
-        const kgData = window.__LABOR_KG_DASHBOARD_DATA__;
-        const laborGraph = kgData?.labor_graph;
-        if (!laborGraph || !Array.isArray(laborGraph.nodes) || !laborGraph.nodes.length) return;
-
-        const positions = new Map([["fomc-hub", [0, 1.0, 0]]]);
-        laborGraph.nodes.forEach((node) => {
-          const x = Number(node?.x ?? 0);
-          const y = Number(node?.y ?? 0);
-          const z = Number(node?.z ?? 0);
-          const size = Math.max(0.03, Number(node?.size ?? 0.08));
-          const color = parseHexColor(node?.color, 0x7bd389);
-          const nodeKind = String(node?.kind || "");
-          const showLabel = nodeKind !== "labor_observation";
-          makeNode(
-            scene,
-            x,
-            y,
-            z,
-            color,
-            size,
-            showLabel ? String(node?.label || "") : "",
-            showLabel ? String(node?.sublabel || "") : "",
-          );
-          positions.set(String(node?.id || ""), [x, y, z]);
-        });
-
-        if (!Array.isArray(laborGraph.edges)) return;
-        laborGraph.edges.forEach((edge) => {
-          const from = positions.get(String(edge?.source || ""));
-          const to = positions.get(String(edge?.target || ""));
-          if (!from || !to) return;
-          addEdge(
-            scene,
-            from,
-            to,
-            parseHexColor(edge?.color, 0x7bd389),
-            Number(edge?.opacity ?? 0.12),
-          );
-        });
+      function importanceRadius(importance, min = 0.06, max = 0.46) {
+        return min + clamp(importance, 0, 1) * (max - min);
       }
 
-      function addTreasuryKnowledgeGraph(scene) {
-        const treasuryData = window.__TREASURY_DASHBOARD_DATA__;
-        const treasuryGraph = treasuryData?.treasury_graph;
-        if (!treasuryGraph || !Array.isArray(treasuryGraph.nodes) || !treasuryGraph.nodes.length) return;
-
-        const positions = new Map([["fomc-hub", [0, 1.0, 0]]]);
-        treasuryGraph.nodes.forEach((node) => {
-          const x = Number(node?.x ?? 0);
-          const y = Number(node?.y ?? 0);
-          const z = Number(node?.z ?? 0);
-          const size = Math.max(0.03, Number(node?.size ?? 0.08));
-          const color = parseHexColor(node?.color, 0xf2cc60);
-          const nodeKind = String(node?.kind || "");
-          const showLabel = nodeKind !== "treasury_observation";
-          makeNode(
-            scene,
-            x,
-            y,
-            z,
-            color,
-            size,
-            showLabel ? String(node?.label || "") : "",
-            showLabel ? String(node?.sublabel || "") : "",
-          );
-          positions.set(String(node?.id || ""), [x, y, z]);
-        });
-
-        if (!Array.isArray(treasuryGraph.edges)) return;
-        treasuryGraph.edges.forEach((edge) => {
-          const from = positions.get(String(edge?.source || ""));
-          const to = positions.get(String(edge?.target || ""));
-          if (!from || !to) return;
-          addEdge(
-            scene,
-            from,
-            to,
-            parseHexColor(edge?.color, 0xf2cc60),
-            Number(edge?.opacity ?? 0.14),
-          );
-        });
+      function rgbToHexInt(r, g, b) {
+        return (clamp(Math.round(r), 0, 255) << 16) | (clamp(Math.round(g), 0, 255) << 8) | clamp(Math.round(b), 0, 255);
       }
 
-      function buildGraph(scene) {
-        const fomcData = window.__FOMC_DASHBOARD_DATA__;
-        const mktData  = window.__MARKET_DASHBOARD_DATA__;
-
-        const signals = fomcData?.signals ?? [
-          { label: "Inflation Pressure", score: 5, tone: "hot",      mentions: 4 },
-          { label: "Labor Strength",     score: 3, tone: "balanced", mentions: 3 },
-          { label: "Growth Momentum",    score: 4, tone: "warm",     mentions: 4 },
-          { label: "Previous Meeting Bias", score: 5, tone: "hot",   mentions: 6 },
-        ];
-        const meetingLabel = fomcData?.meeting_label ?? "FOMC Statement";
-        const decision     = fomcData?.decision?.toUpperCase() ?? "HOLD";
-        const voteTally    = fomcData?.vote_tally ?? "";
-        const decisionStr  = voteTally ? `${decision}  ${voteTally}` : decision;
-
-        // ── FOMC hub ─────────────────────────────────────────────
-        const HUB_Y = 1.0;
-        makeNode(scene, 0, HUB_Y, 0, 0x8dc8ff, 0.56, meetingLabel, decisionStr);
-
-        // ── Signal ring ──────────────────────────────────────────
-        const SIG_R = 3.4;
-        signals.forEach((sig, i) => {
-          const angle = (i / signals.length) * Math.PI * 2 - Math.PI / 2;
-          const sx = Math.cos(angle) * SIG_R, sz = Math.sin(angle) * SIG_R;
-          const color = TONE_HEX[sig.tone] ?? 0x8dc8ff;
-          const r = 0.22 + (sig.score / 5) * 0.26;
-          makeNode(scene, sx, HUB_Y, sz, color, r, sig.label, `${sig.mentions}×  ·  ${sig.score}/5`);
-          addEdge(scene, [0, HUB_Y, 0], [sx, HUB_Y, sz], color, 0.22);
-        });
-
-        // ── Market hub ───────────────────────────────────────────
-        const MKT_Y = -2.2;
-        const targetLabel = mktData?.target_meeting
-          ? `Sep ${mktData.target_meeting.slice(0, 4)}`
-          : "Sep 2026";
-        makeNode(scene, 0, MKT_Y, 0, 0x79c0ff, 0.4, "Markets", targetLabel);
-
-        // Spine connecting FOMC to Market hub
-        addEdge(scene, [0, HUB_Y, 0], [0, MKT_Y, 0], 0x4a5568, 0.35);
-
-        // ── Market outcome ring ───────────────────────────────────
-        if (mktData?.blended_probabilities) {
-          const bp  = mktData.blended_probabilities;
-          const tot = (bp.raise ?? 0) + (bp.hold ?? 0) + (bp.cut ?? 0);
-          const norm = (v) => (tot > 0 ? v / tot : 0);
-          [
-            { key: "raise", label: "Raise", color: 0xff7b72 },
-            { key: "hold",  label: "Hold",  color: 0x8dc8ff },
-            { key: "cut",   label: "Cut",   color: 0x58a6ff },
-          ].forEach(({ key, label, color }, i) => {
-            const pct   = norm(bp[key] ?? 0);
-            const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
-            const mx = Math.cos(angle) * 2.2, mz = Math.sin(angle) * 2.2;
-            const r  = 0.14 + pct * 0.52;
-            makeNode(scene, mx, MKT_Y, mz, color, r, label, `${Math.round(pct * 100)}%`);
-            addEdge(scene, [0, MKT_Y, 0], [mx, MKT_Y, mz], color, 0.22);
-          });
+      // +1 raise => red, 0 => white, -1 lower => green
+      function biasToColorHex(biasValue) {
+        const bias = clamp(Number(biasValue || 0), -1, 1);
+        if (bias >= 0) {
+          const t = bias;
+          return rgbToHexInt(255, 255 - 165 * t, 255 - 165 * t);
         }
+        const t = -bias;
+        return rgbToHexInt(255 - 155 * t, 255, 255 - 155 * t);
+      }
 
-        // ── CPI subgraph (dense historical observations) ───────────
-        addCpiKnowledgeGraph(scene);
-        addLaborKnowledgeGraph(scene);
-        addTreasuryKnowledgeGraph(scene);
+      function extractSeriesValue(list, matcher) {
+        if (!Array.isArray(list)) return null;
+        const match = list.find((item) => matcher(String(item?.maturity || item?.label || item?.series_id || "")));
+        return parseNumeric(match?.yield_pct ?? match?.value ?? null);
+      }
 
-        // ── Reference grid ────────────────────────────────────────
+      // Relevance weights the FOMC actually leans on, by data category.
+      const CATEGORY_WEIGHTS = {
+        cpi: { core: 1.0, headline: 0.9, housing: 0.85, services: 0.8, energy: 0.55, food: 0.5 },
+        labor: { unemployment: 1.0, payrolls: 0.95, wages: 0.9, demand: 0.7, participation: 0.6 },
+      };
+
+      function categoryWeight(domain, category) {
+        const table = CATEGORY_WEIGHTS[domain] || {};
+        return table[String(category || "").toLowerCase()] ?? 0.45;
+      }
+
+      function pearson(a, b) {
+        const n = Math.min(a.length, b.length);
+        if (n < 3) return 0;
+        const xs = a.slice(-n);
+        const ys = b.slice(-n);
+        const meanX = xs.reduce((sum, v) => sum + v, 0) / n;
+        const meanY = ys.reduce((sum, v) => sum + v, 0) / n;
+        let num = 0;
+        let dx = 0;
+        let dy = 0;
+        for (let i = 0; i < n; i += 1) {
+          const vx = xs[i] - meanX;
+          const vy = ys[i] - meanY;
+          num += vx * vy;
+          dx += vx * vx;
+          dy += vy * vy;
+        }
+        const denom = Math.sqrt(dx * dy);
+        return denom > 0 ? clamp(num / denom, -1, 1) : 0;
+      }
+
+      function addArc(scene, radius, y, startAngle, endAngle, hexColor, opacity) {
+        const steps = Math.max(6, Math.round(Math.abs(endAngle - startAngle) * 18));
+        const pts = [];
+        for (let i = 0; i <= steps; i += 1) {
+          const angle = startAngle + ((endAngle - startAngle) * i) / steps;
+          pts.push(new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius));
+        }
+        scene.add(new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(pts),
+          new THREE.LineBasicMaterial({ color: hexColor, transparent: true, opacity: opacity ?? 0.4 }),
+        ));
+      }
+
+      function mulberry32(seed) {
+        let a = seed >>> 0;
+        return function random() {
+          a |= 0;
+          a = (a + 0x6d2b79f5) | 0;
+          let t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function gaussian(random) {
+        const u = Math.max(1e-9, random());
+        const v = random();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      }
+
+      function addPointCloud(scene, entries, size) {
+        if (!entries.length) return;
+        const positions = new Float32Array(entries.length * 3);
+        const colors = new Float32Array(entries.length * 3);
+        entries.forEach((entry, index) => {
+          positions[index * 3] = entry.position[0];
+          positions[index * 3 + 1] = entry.position[1];
+          positions[index * 3 + 2] = entry.position[2];
+          const color = new THREE.Color(entry.color);
+          colors[index * 3] = color.r;
+          colors[index * 3 + 1] = color.g;
+          colors[index * 3 + 2] = color.b;
+        });
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        scene.add(new THREE.Points(geometry, new THREE.PointsMaterial({
+          size: size ?? 0.11,
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.72,
+          sizeAttenuation: true,
+        })));
+      }
+
+      function addBar(scene, fromX, toX, y, z, hexColor, thickness) {
+        const length = Math.abs(toX - fromX);
+        if (length < 0.001) return;
+        const geometry = new THREE.BoxGeometry(length, thickness, thickness);
+        const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({
+          color: hexColor, transparent: true, opacity: 0.75, emissive: hexColor, emissiveIntensity: 0.08,
+        }));
+        mesh.position.set((fromX + toX) / 2, y, z);
+        scene.add(mesh);
+      }
+
+      // Draws a flow as several parallel strands so thickness reads as volume.
+      function addFlow(scene, from, to, hexColor, weight) {
+        const strands = Math.max(1, Math.round(1 + clamp(weight, 0, 1) * 5));
+        for (let i = 0; i < strands; i += 1) {
+          const offset = (i - (strands - 1) / 2) * 0.055;
+          addEdge(
+            scene,
+            [from[0], from[1] + offset, from[2] + offset],
+            [to[0], to[1] + offset, to[2] + offset],
+            hexColor,
+            clamp(0.08 + weight * 0.3, 0.06, 0.42),
+          );
+        }
+      }
+
+      function addReferenceGrid(scene) {
         const grid = new THREE.GridHelper(12, 12, 0x203250, 0x121f30);
         grid.position.y = -3.3;
         scene.add(grid);
       }
 
-      function init() {
+      // Published FOMC meeting dates used to project forward beyond the market's target meeting.
+      const FOMC_SCHEDULE = [
+        "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17", "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
+        "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-16", "2027-07-28", "2027-09-22", "2027-11-03", "2027-12-15",
+      ];
+      const DECISION_BIAS = { raise: 1, hold: 0, cut: -1 };
+      const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+      function labelForDate(dateStr) {
+        const parts = String(dateStr || "").split("-");
+        if (parts.length < 3) return String(dateStr || "Meeting");
+        return `${MONTH_LABELS[Number(parts[1]) - 1] || parts[1]} ${parts[0]}`;
+      }
+
+      function dissentShareFromTally(tally) {
+        const match = String(tally || "").match(/(\d+)\s*[-–]\s*(\d+)/);
+        if (!match) return 0;
+        const agree = Number(match[1]);
+        const against = Number(match[2]);
+        const total = agree + against;
+        return total > 0 ? clamp(against / total, 0, 1) : 0;
+      }
+
+      function probabilitiesFromBias(bias, confidence) {
+        const temperature = 1.6 + 2.4 * clamp(confidence, 0, 1);
+        const utilities = { raise: bias, hold: 0.45, cut: -bias };
+        const weights = Object.fromEntries(
+          Object.entries(utilities).map(([key, value]) => [key, Math.exp(value * temperature)]),
+        );
+        const total = weights.raise + weights.hold + weights.cut;
+        return { raise: weights.raise / total, hold: weights.hold / total, cut: weights.cut / total };
+      }
+
+      function historicalMeetings() {
+        const history = window.__FOMC_HISTORY_DATA__ || {};
+        const all = [];
+        Object.values(history).forEach((list) => (list || []).forEach((meeting) => {
+          if (meeting?.meeting_date) all.push(meeting);
+        }));
+        return all.sort((a, b) => String(a.meeting_date).localeCompare(String(b.meeting_date)));
+      }
+
+      // How much of a meeting's stance survives to the next one, given the data released in between.
+      // Roughly one CPI print and one jobs report per month erodes the prior meeting's anchor.
+      function carryOverFactor(fromDate, toDate) {
+        const days = Math.abs(Date.parse(toDate) - Date.parse(fromDate)) / 86400000;
+        const releases = Math.max(1, Math.round((Number.isFinite(days) ? days : 49) / 30));
+        return { carry: clamp(1 / (1 + releases * 0.55), 0.15, 0.9), releases: releases * 2 };
+      }
+
+      function buildMeetingChain() {
+        const fomcData = window.__FOMC_DASHBOARD_DATA__;
+        const marketData = window.__MARKET_DASHBOARD_DATA__;
+        const cpiData = window.__CPI_DASHBOARD_DATA__;
+        const laborData = window.__LABOR_DASHBOARD_DATA__;
+        const treasuryData = window.__TREASURY_DASHBOARD_DATA__;
+
+        const cpiBias = clamp(Number(cpiData?.metrics?.cpi_bias || 0), -1, 1);
+        const laborBias = clamp(Number(laborData?.metrics?.labor_bias || 0), -1, 1);
+        const y2 = extractSeriesValue(treasuryData?.points, (value) => value.includes("2Y"));
+        const y10 = extractSeriesValue(treasuryData?.points, (value) => value.includes("10Y"));
+        const slope = y10 !== null && y2 !== null ? y10 - y2 : null;
+        const treasurySlopeBias = slope === null ? 0 : clamp(slope / 1.5, -1, 1);
+        const macroBias = clamp(0.45 * cpiBias + 0.35 * laborBias + 0.2 * treasurySlopeBias, -1, 1);
+
+        const history = historicalMeetings();
+        const lastHeldDate = history.length ? String(history[history.length - 1].meeting_date) : "2026-07-29";
+        const targetDate = String(marketData?.target_meeting || FOMC_SCHEDULE.find((date) => date > lastHeldDate) || lastHeldDate);
+        const latestBiasSignal = (fomcData?.signals || []).find((item) => String(item?.label || "").toLowerCase().includes("bias"));
+        const latestBias = parseNumeric(latestBiasSignal?.display);
+
+        const past = history.filter((meeting) => String(meeting.meeting_date) < targetDate).slice(-2).map((meeting) => {
+          const decision = String(meeting.decision || "hold").toLowerCase();
+          const dissent = dissentShareFromTally(meeting.vote_tally);
+          const isLatest = String(meeting.meeting_date) === lastHeldDate && latestBias !== null;
+          const bias = isLatest ? clamp(latestBias, -1, 1) : clamp(DECISION_BIAS[decision] ?? 0, -1, 1);
+          const probabilities = { raise: 0, hold: 0, cut: 0 };
+          probabilities[decision in probabilities ? decision : "hold"] = 1;
+          return {
+            date: String(meeting.meeting_date),
+            label: labelForDate(meeting.meeting_date),
+            status: "held",
+            decision,
+            voteTally: String(meeting.vote_tally || ""),
+            bias,
+            confidence: clamp(1 - dissent, 0.2, 1),
+            probabilities,
+            detail: `${decision.toUpperCase()}${meeting.vote_tally ? ` ${meeting.vote_tally}` : ""} · bias ${bias >= 0 ? "+" : ""}${bias.toFixed(2)}`,
+          };
+        });
+
+        const marketProbabilities = {
+          raise: Number(marketData?.blended_probabilities?.raise || 0),
+          hold: Number(marketData?.blended_probabilities?.hold || 0),
+          cut: Number(marketData?.blended_probabilities?.cut || 0),
+        };
+        const marketTotal = marketProbabilities.raise + marketProbabilities.hold + marketProbabilities.cut;
+        const normalizedMarket = marketTotal > 0
+          ? {
+            raise: marketProbabilities.raise / marketTotal,
+            hold: marketProbabilities.hold / marketTotal,
+            cut: marketProbabilities.cut / marketTotal,
+          }
+          : probabilitiesFromBias(macroBias, 0.4);
+
+        const current = {
+          date: targetDate,
+          label: labelForDate(targetDate),
+          status: "priced",
+          decision: Object.entries(normalizedMarket).sort((a, b) => b[1] - a[1])[0][0],
+          voteTally: "",
+          bias: clamp(normalizedMarket.raise - normalizedMarket.cut, -1, 1),
+          confidence: Math.max(normalizedMarket.raise, normalizedMarket.hold, normalizedMarket.cut),
+          probabilities: normalizedMarket,
+          detail: `market R ${Math.round(normalizedMarket.raise * 100)}% · H ${Math.round(normalizedMarket.hold * 100)}% · C ${Math.round(normalizedMarket.cut * 100)}%`,
+        };
+
+        const chain = [...past, current];
+        FOMC_SCHEDULE.filter((date) => date > targetDate).slice(0, 2).forEach((date) => {
+          const prior = chain[chain.length - 1];
+          const { carry, releases } = carryOverFactor(prior.date, date);
+          const bias = clamp(prior.bias * carry + macroBias * (1 - carry), -1, 1);
+          const confidence = clamp(prior.confidence * carry + 0.34 * (1 - carry), 0.2, 1);
+          const probabilities = probabilitiesFromBias(bias, confidence);
+          chain.push({
+            date,
+            label: labelForDate(date),
+            status: "projected",
+            decision: Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0][0],
+            voteTally: "",
+            bias,
+            confidence,
+            probabilities,
+            carry,
+            releases,
+            detail: `projected R ${Math.round(probabilities.raise * 100)}% · H ${Math.round(probabilities.hold * 100)}% · C ${Math.round(probabilities.cut * 100)}%`,
+          });
+        });
+
+        // Backfill carry-over strength for every link, including held -> priced.
+        for (let index = 1; index < chain.length; index += 1) {
+          if (chain[index].carry === undefined) {
+            const { carry, releases } = carryOverFactor(chain[index - 1].date, chain[index].date);
+            chain[index].carry = carry;
+            chain[index].releases = releases;
+          }
+        }
+
+        const focusIndex = clamp(chain.findIndex((entry) => entry.date === targetDate), 0, chain.length - 1);
+        return { chain, focusIndex, macroBias, cpiBias, laborBias, slope, treasurySlopeBias };
+      }
+
+      function currentFocusIndex(chain, anchorIndex) {
+        const offset = Number(window.__KG_MEETING_OFFSET__ || 0);
+        return clamp(anchorIndex + offset, 0, chain.length - 1);
+      }
+
+      function buildCoreContext() {
+        const fomcData = window.__FOMC_DASHBOARD_DATA__;
+        const marketData = window.__MARKET_DASHBOARD_DATA__;
+        const cpiData = window.__CPI_DASHBOARD_DATA__;
+        const laborData = window.__LABOR_DASHBOARD_DATA__;
+        const treasuryData = window.__TREASURY_DASHBOARD_DATA__;
+
+        const signals = fomcData?.signals ?? [
+          { label: "Inflation Pressure", score: 5, tone: "hot", mentions: 4 },
+          { label: "Labor Strength", score: 3, tone: "balanced", mentions: 3 },
+          { label: "Growth Momentum", score: 4, tone: "warm", mentions: 4 },
+          { label: "Previous Meeting Bias", score: 4, tone: "warm", mentions: 2, display: "+0.20" },
+        ];
+
+        const timeline = buildMeetingChain();
+        const { chain } = timeline;
+        const focusIndex = currentFocusIndex(chain, timeline.focusIndex);
+        const focus = chain[focusIndex];
+        const previous = focusIndex > 0 ? chain[focusIndex - 1] : null;
+
+        const meetingLabel = `${focus.label} FOMC`;
+        const decisionStr = focus.status === "held"
+          ? `${String(focus.decision).toUpperCase()}${focus.voteTally ? ` ${focus.voteTally}` : ""}`
+          : `${focus.status === "priced" ? "PRICED" : "PROJECTED"} ${String(focus.decision).toUpperCase()}`;
+
+        const previousBias = previous ? previous.bias : (parseNumeric(signals.find((item) => String(item?.label || "").toLowerCase().includes("bias"))?.display) ?? 0);
+        const carryFromPrevious = focus.carry ?? 0;
+        const marketRaise = focus.probabilities.raise;
+        const marketHold = focus.probabilities.hold;
+        const marketCut = focus.probabilities.cut;
+        const marketBias = clamp(marketRaise - marketCut, -1, 1);
+
+        // Macro readings are "latest available"; for projected meetings they are damped by how much
+        // fresh data is still expected to land before that meeting.
+        const freshness = focus.status === "projected" ? clamp(1 - (1 - carryFromPrevious) * 0.5, 0.5, 1) : 1;
+        const cpiBias = clamp(timeline.cpiBias * freshness, -1, 1);
+        const laborBias = clamp(timeline.laborBias * freshness, -1, 1);
+        const treasurySlopeBias = clamp(timeline.treasurySlopeBias * freshness, -1, 1);
+
+        return {
+          signals,
+          meetingLabel,
+          decisionStr,
+          marketData,
+          cpiData,
+          laborData,
+          treasuryData,
+          chain,
+          focusIndex,
+          focus,
+          previous,
+          carryFromPrevious,
+          macroBias: timeline.macroBias,
+          freshness,
+          previousBias,
+          marketBias,
+          marketRaise,
+          marketHold,
+          marketCut,
+          cpiBias,
+          laborBias,
+          slope: timeline.slope,
+          treasurySlopeBias,
+        };
+      }
+
+      function addMeetingChain(scene, context, chainY) {
+        const chain = context.chain || [];
+        if (!chain.length) return;
+        const spacing = 2.7;
+        const startX = -((chain.length - 1) / 2) * spacing;
+        const positions = chain.map((_, index) => [startX + index * spacing, chainY, 0]);
+
+        chain.forEach((entry, index) => {
+          const focused = index === context.focusIndex;
+          const importance = clamp(0.3 + Math.abs(entry.bias) * 0.45 + entry.confidence * 0.3, 0, 1);
+          const radius = focused
+            ? importanceRadius(importance, 0.3, 0.6)
+            : importanceRadius(importance, 0.11, 0.26);
+          const statusMark = entry.status === "held" ? "✓" : entry.status === "priced" ? "◉" : "◇";
+          makeNode(
+            scene,
+            positions[index][0],
+            positions[index][1],
+            positions[index][2],
+            biasToColorHex(entry.bias),
+            radius,
+            `${focused ? "▶ " : ""}${statusMark} ${entry.label}`,
+            entry.detail,
+          );
+
+          if (focused) {
+            const ring = new THREE.Mesh(
+              new THREE.TorusGeometry(radius * 2.1, 0.022, 8, 56),
+              new THREE.MeshBasicMaterial({ color: 0x8dc8ff, transparent: true, opacity: 0.75 }),
+            );
+            ring.position.set(positions[index][0], positions[index][1], positions[index][2]);
+            ring.rotation.x = Math.PI / 2;
+            scene.add(ring);
+          }
+
+          if (index > 0) {
+            const carry = clamp(Number(entry.carry ?? 0.4), 0.05, 1);
+            addEdge(scene, positions[index - 1], positions[index], 0x8dc8ff, clamp(carry, 0.12, 0.85));
+            const midX = (positions[index - 1][0] + positions[index][0]) / 2;
+            makeNode(
+              scene,
+              midX,
+              chainY + 0.7,
+              0,
+              biasToColorHex(chain[index - 1].bias),
+              0.04 + carry * 0.11,
+              `carry ${Math.round(carry * 100)}%`,
+              `${entry.releases || 0} new CPI/jobs prints`,
+            );
+            addEdge(scene, [midX, chainY + 0.7, 0], [midX, chainY, 0], 0x8dc8ff, 0.18);
+          }
+        });
+
+        // Tie the focused meeting into the rest of the scene.
+        addEdge(scene, positions[context.focusIndex], [0, chainY - 1.6, 0], 0x8dc8ff, 0.25);
+      }
+
+      function extractGraphObservations({
+        graph,
+        seriesKind,
+        observationKind,
+        seriesPrefix,
+        observationPrefix,
+        perSeriesLimit = 6,
+      }) {
+        if (!graph || !Array.isArray(graph.nodes)) return [];
+        const seriesMap = new Map();
+        graph.nodes.forEach((node) => {
+          if (node?.kind !== seriesKind) return;
+          const id = String(node?.id || "");
+          const key = id.startsWith(seriesPrefix) ? id.slice(seriesPrefix.length) : id;
+          seriesMap.set(key, {
+            label: String(node?.label || key),
+            key: String(node?.sublabel || key),
+          });
+        });
+
+        const bySeries = new Map();
+        graph.nodes.forEach((node) => {
+          if (node?.kind !== observationKind) return;
+          const id = String(node?.id || "");
+          const obsId = id.startsWith(observationPrefix) ? id.slice(observationPrefix.length) : id;
+          const lastSep = obsId.lastIndexOf(":");
+          const seriesKey = lastSep > 0 ? obsId.slice(0, lastSep) : obsId;
+          const dateStr = String(node?.label || "");
+          const timestamp = Date.parse(dateStr);
+          const value = parseNumeric(node?.sublabel);
+          const series = seriesMap.get(seriesKey) || { label: seriesKey, key: seriesKey };
+          if (!Number.isFinite(timestamp) || value === null) return;
+          if (!bySeries.has(seriesKey)) bySeries.set(seriesKey, []);
+          bySeries.get(seriesKey).push({
+            date: dateStr,
+            timestamp,
+            value,
+            seriesLabel: series.label,
+            seriesKey: series.key,
+          });
+        });
+
+        const points = [];
+        bySeries.forEach((seriesPoints) => {
+          seriesPoints.sort((a, b) => a.timestamp - b.timestamp);
+          seriesPoints.slice(-perSeriesLimit).forEach((item, index, arr) => {
+            points.push({ ...item, isLast: index === arr.length - 1 });
+          });
+        });
+        return points.sort((a, b) => a.timestamp - b.timestamp);
+      }
+
+      function buildGraphExperiment1(scene, context) {
+        const hub = [0, 0.9, 0];
+        const axisY = -3.05;
+        const axisSpan = 4.8;
+        makeNode(scene, hub[0], hub[1], hub[2], 0x8dc8ff, 0.56, context.meetingLabel, context.decisionStr);
+
+        addEdge(scene, [-axisSpan - 0.4, axisY, 0], [axisSpan + 0.4, axisY, 0], 0xffffff, 0.18);
+        [
+          { bias: -1, label: "Lower", detail: "-1" },
+          { bias: 0, label: "Hold", detail: "0" },
+          { bias: 1, label: "Raise", detail: "+1" },
+        ].forEach((tick) => {
+          makeNode(scene, tick.bias * axisSpan, axisY, 0, biasToColorHex(tick.bias), 0.09, tick.label, tick.detail);
+        });
+
+        const biasNodes = [
+          { label: "Previous Meeting Bias", bias: context.previousBias, detail: `${context.previousBias >= 0 ? "+" : ""}${context.previousBias.toFixed(2)}`, weight: 0.95 },
+          { label: "Market Net Bias", bias: context.marketBias, detail: `R ${Math.round(context.marketRaise * 100)}% · H ${Math.round(context.marketHold * 100)}% · C ${Math.round(context.marketCut * 100)}%`, weight: 0.9 },
+          { label: "CPI Bias", bias: context.cpiBias, detail: `${context.cpiBias >= 0 ? "+" : ""}${context.cpiBias.toFixed(2)}`, weight: 0.78 },
+          { label: "Labor Bias", bias: context.laborBias, detail: `${context.laborBias >= 0 ? "+" : ""}${context.laborBias.toFixed(2)}`, weight: 0.76 },
+          { label: "Treasury Curve Bias", bias: context.treasurySlopeBias, detail: context.slope === null ? "n/a" : `10Y-2Y ${context.slope >= 0 ? "+" : ""}${context.slope.toFixed(2)}`, weight: 0.64 },
+        ].sort((a, b) => b.bias - a.bias);
+
+        biasNodes.forEach((item, index) => {
+          const x = clamp(item.bias, -1, 1) * axisSpan;
+          const y = 3.15 - index * 1.15;
+          const z = index % 2 === 0 ? -0.95 : 0.95;
+          const importance = clamp(0.35 + Math.abs(item.bias) * 0.4 + item.weight * 0.35, 0, 1);
+          const radius = importanceRadius(importance, 0.12, 0.52);
+          const color = biasToColorHex(item.bias);
+          makeNode(scene, x, y, z, color, radius, item.label, item.detail);
+          addEdge(scene, hub, [x, y, z], color, 0.26);
+          addEdge(scene, [x, y, z], [x, axisY, 0], color, 0.12);
+        });
+
+        [
+          { key: "raise", prob: context.marketRaise, bias: 1 },
+          { key: "hold", prob: context.marketHold, bias: 0 },
+          { key: "cut", prob: context.marketCut, bias: -1 },
+        ].forEach((item) => {
+          const x = item.bias * axisSpan;
+          const y = -1.95;
+          const radius = importanceRadius(clamp(item.prob, 0, 1), 0.08, 0.4);
+          const color = biasToColorHex(item.bias);
+          makeNode(scene, x, y, 0, color, radius, item.key.toUpperCase(), `${Math.round(item.prob * 100)}%`);
+          addEdge(scene, hub, [x, y, 0], color, 0.18);
+          addEdge(scene, [x, y, 0], [x, axisY, 0], color, 0.12);
+        });
+
+        addReferenceGrid(scene);
+      }
+
+      function buildGraphExperiment2(scene, context) {
+        const hub = [0, 1.0, 0];
+        makeNode(scene, hub[0], hub[1], hub[2], 0x8dc8ff, 0.52, context.meetingLabel, context.decisionStr);
+
+        const clusterDefs = [
+          { id: "fomc", label: "FOMC Signals", color: 0xffa657, bias: context.previousBias },
+          { id: "market", label: "Markets", color: 0x79c0ff, bias: context.marketBias },
+          { id: "cpi", label: "CPI", color: 0xff7b72, bias: context.cpiBias },
+          { id: "labor", label: "Labor", color: 0x7bd389, bias: context.laborBias },
+          { id: "treasury", label: "Treasuries", color: 0xf2cc60, bias: context.treasurySlopeBias },
+        ];
+        const ringRadius = 5.6;
+        const clusters = clusterDefs.map((def, index) => {
+          const angle = (index / clusterDefs.length) * Math.PI * 2 - Math.PI / 2;
+          return {
+            ...def,
+            center: [Math.cos(angle) * ringRadius, 1.0 + Math.sin(angle * 2) * 1.1, Math.sin(angle) * ringRadius],
+          };
+        });
+        const placeAround = (center, index, total) => {
+          const count = Math.max(1, total);
+          const radius = 0.95 + count * 0.17;
+          const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
+          const lift = ((index % 3) - 1) * 0.5;
+          return [center[0] + Math.cos(angle) * radius, center[1] + lift, center[2] + Math.sin(angle) * radius];
+        };
+
+        clusters.forEach((cluster) => {
+          const detail = `${cluster.bias >= 0 ? "+" : ""}${Number(cluster.bias || 0).toFixed(2)} bias`;
+          makeNode(scene, cluster.center[0], cluster.center[1], cluster.center[2], biasToColorHex(cluster.bias), 0.3, cluster.label, detail);
+          addEdge(scene, hub, cluster.center, cluster.color, 0.24);
+        });
+
+        const fomcCluster = clusters.find((item) => item.id === "fomc");
+        context.signals.forEach((signal, index) => {
+          const pos = placeAround(fomcCluster.center, index, context.signals.length);
+          const score = Number(signal?.score || 3);
+          const importance = clamp(score / 5, 0.1, 1);
+          const color = TONE_HEX[String(signal?.tone || "balanced")] ?? 0x8dc8ff;
+          makeNode(scene, pos[0], pos[1], pos[2], color, importanceRadius(importance, 0.08, 0.3), String(signal?.label || "Signal"), `${score}/5`);
+          addEdge(scene, fomcCluster.center, pos, color, 0.22);
+        });
+
+        const marketCluster = clusters.find((item) => item.id === "market");
+        [
+          { label: "Raise", prob: context.marketRaise, bias: 1 },
+          { label: "Hold", prob: context.marketHold, bias: 0 },
+          { label: "Cut", prob: context.marketCut, bias: -1 },
+        ].forEach((outcome, index, all) => {
+          const pos = placeAround(marketCluster.center, index, all.length);
+          const color = biasToColorHex(outcome.bias);
+          makeNode(scene, pos[0], pos[1], pos[2], color, importanceRadius(clamp(outcome.prob, 0, 1), 0.08, 0.34), outcome.label, `${Math.round(outcome.prob * 100)}%`);
+          addEdge(scene, marketCluster.center, pos, color, 0.26);
+        });
+
+        const cpiValues = (context.cpiData?.latest_values || []).slice(0, 9);
+        const cpiCluster = clusters.find((item) => item.id === "cpi");
+        cpiValues.forEach((item, index) => {
+          const value = Number(item?.value || 0);
+          const weight = categoryWeight("cpi", item?.category);
+          const pos = placeAround(cpiCluster.center, index, cpiValues.length);
+          const color = biasToColorHex(context.cpiBias * weight);
+          makeNode(scene, pos[0], pos[1], pos[2], color, importanceRadius(weight, 0.05, 0.22), String(item?.label || "CPI"), `${String(item?.category || "")} · ${value.toFixed(1)}`);
+          addEdge(scene, cpiCluster.center, pos, 0xff7b72, 0.18);
+        });
+
+        const laborValues = (context.laborData?.latest_values || []).slice(0, 10);
+        const laborCluster = clusters.find((item) => item.id === "labor");
+        laborValues.forEach((item, index) => {
+          const value = Number(item?.value || 0);
+          const weight = categoryWeight("labor", item?.category);
+          const pos = placeAround(laborCluster.center, index, laborValues.length);
+          const color = biasToColorHex(context.laborBias * weight);
+          makeNode(scene, pos[0], pos[1], pos[2], color, importanceRadius(weight, 0.05, 0.24), String(item?.label || "Labor"), `${String(item?.category || "")} · ${value.toFixed(1)}`);
+          addEdge(scene, laborCluster.center, pos, 0x7bd389, 0.18);
+        });
+
+        const treasuryPoints = context.treasuryData?.points || [];
+        const treasuryCluster = clusters.find((item) => item.id === "treasury");
+        treasuryPoints.forEach((item, index) => {
+          const change = Number(item?.change_value || 0);
+          const importance = clamp(Math.abs(change) / 0.2, 0.15, 1);
+          const pos = placeAround(treasuryCluster.center, index, Math.max(1, treasuryPoints.length));
+          makeNode(
+            scene,
+            pos[0],
+            pos[1],
+            pos[2],
+            biasToColorHex(clamp(change / 0.15, -1, 1)),
+            importanceRadius(importance, 0.06, 0.24),
+            String(item?.label || "Treasury"),
+            `${String(item?.maturity || "")} · ${Number(item?.yield_pct || 0).toFixed(3)}%`
+          );
+          addEdge(scene, treasuryCluster.center, pos, 0xf2cc60, 0.2);
+        });
+
+        addReferenceGrid(scene);
+      }
+
+      function buildGraphExperiment3(scene, context) {
+        const cpiObs = extractGraphObservations({
+          graph: window.__KG_DASHBOARD_DATA__?.cpi_graph,
+          seriesKind: "cpi_series",
+          observationKind: "cpi_observation",
+          seriesPrefix: "cpi-series:",
+          observationPrefix: "cpi-obs:",
+          perSeriesLimit: 6,
+        }).map((item) => ({ ...item, dataset: "CPI", color: 0xff7b72, laneY: 2.2 }));
+        const laborObs = extractGraphObservations({
+          graph: window.__LABOR_KG_DASHBOARD_DATA__?.labor_graph,
+          seriesKind: "labor_series",
+          observationKind: "labor_observation",
+          seriesPrefix: "labor-series:",
+          observationPrefix: "labor-obs:",
+          perSeriesLimit: 6,
+        }).map((item) => ({ ...item, dataset: "Labor", color: 0x7bd389, laneY: 0.0 }));
+        const treasuryObs = extractGraphObservations({
+          graph: window.__TREASURY_DASHBOARD_DATA__?.treasury_graph,
+          seriesKind: "treasury_series",
+          observationKind: "treasury_observation",
+          seriesPrefix: "treasury-series:",
+          observationPrefix: "treasury-obs:",
+          perSeriesLimit: 6,
+        }).map((item) => ({ ...item, dataset: "Treasury", color: 0xf2cc60, laneY: -2.2 }));
+
+        const points = [...cpiObs, ...laborObs, ...treasuryObs];
+        makeNode(scene, 0, 4.0, 0, 0x8dc8ff, 0.42, "Macro Timeline", "Size = local importance");
+        if (!points.length) {
+          addReferenceGrid(scene);
+          return;
+        }
+
+        const timestamps = points.map((item) => item.timestamp);
+        const minT = Math.min(...timestamps);
+        const maxT = Math.max(...timestamps);
+        const tSpan = Math.max(1, maxT - minT);
+        const groups = new Map();
+        points.forEach((item) => {
+          const groupKey = `${item.dataset}:${item.seriesKey}`;
+          if (!groups.has(groupKey)) groups.set(groupKey, []);
+          groups.get(groupKey).push(item);
+        });
+        groups.forEach((groupPoints) => groupPoints.sort((a, b) => a.timestamp - b.timestamp));
+
+        [
+          { label: "CPI lane", y: 2.2, color: 0xff7b72 },
+          { label: "Labor lane", y: 0.0, color: 0x7bd389 },
+          { label: "Treasury lane", y: -2.2, color: 0xf2cc60 },
+        ].forEach((lane) => {
+          makeNode(scene, -6.6, lane.y, 0, lane.color, 0.14, lane.label, "");
+          addEdge(scene, [0, 4.0, 0], [-6.6, lane.y, 0], lane.color, 0.16);
+          addEdge(scene, [-5.9, lane.y, 0], [5.9, lane.y, 0], lane.color, 0.13);
+        });
+
+        const tickCount = 4;
+        for (let i = 0; i <= tickCount; i += 1) {
+          const ratio = i / tickCount;
+          const x = -5.4 + ratio * 10.8;
+          const tickDate = new Date(minT + tSpan * ratio);
+          const tickLabel = Number.isFinite(tickDate.getTime()) ? tickDate.toISOString().slice(0, 7) : "";
+          makeNode(scene, x, -3.15, 0, 0x8dc8ff, 0.05, tickLabel, "");
+          addEdge(scene, [x, -3.15, 0], [x, 2.7, 0], 0x8dc8ff, 0.05);
+        }
+
+        // Focused meeting marker, projected onto the same time axis (clamped when it sits in the future).
+        const focus = context?.focus;
+        if (focus) {
+          const focusT = Date.parse(focus.date);
+          if (Number.isFinite(focusT)) {
+            const rawRatio = (focusT - minT) / tSpan;
+            const beyond = rawRatio > 1;
+            const x = -5.4 + clamp(rawRatio, 0, 1) * 10.8;
+            addEdge(scene, [x, -3.3, 0], [x, 3.4, 0], biasToColorHex(focus.bias), 0.55);
+            makeNode(
+              scene,
+              x,
+              3.4,
+              0,
+              biasToColorHex(focus.bias),
+              0.16,
+              `${focus.label} meeting`,
+              beyond ? `${focus.detail} (ahead of latest data)` : focus.detail,
+            );
+          }
+        }
+
+        groups.forEach((groupPoints) => {
+          const valueMin = Math.min(...groupPoints.map((item) => item.value));
+          const valueMax = Math.max(...groupPoints.map((item) => item.value));
+          const valueSpan = Math.max(0.0001, valueMax - valueMin);
+          let previousPosition = null;
+          groupPoints.forEach((point, index) => {
+            const x = -5.4 + ((point.timestamp - minT) / tSpan) * 10.8;
+            const zBase = ((point.value - valueMin) / valueSpan - 0.5) * 3.2;
+            const z = zBase + (index % 2 === 0 ? 0.08 : -0.08);
+            const prev = index > 0 ? groupPoints[index - 1] : null;
+            const relChange = prev ? Math.abs((point.value - prev.value) / Math.max(Math.abs(prev.value), 0.0001)) : 0.05;
+            const importance = clamp((relChange * 3.5) + (point.isLast ? 0.35 : 0.0), 0.08, 1);
+            const radius = importanceRadius(importance, 0.03, 0.16);
+            const isFirst = index === 0;
+            const showLabel = point.isLast || isFirst;
+            makeNode(
+              scene,
+              x,
+              point.laneY,
+              z,
+              point.color,
+              radius,
+              point.isLast ? point.seriesLabel : "",
+              showLabel ? `${point.date} · ${point.value.toFixed(2)}` : "",
+            );
+            const currentPosition = [x, point.laneY, z];
+            if (previousPosition) addEdge(scene, previousPosition, currentPosition, point.color, 0.22);
+            previousPosition = currentPosition;
+          });
+        });
+
+        addReferenceGrid(scene);
+      }
+
+      function collectDomainSeries(perSeriesLimit = 12) {
+        const configs = [
+          {
+            domain: "CPI",
+            color: 0xff7b72,
+            graph: window.__KG_DASHBOARD_DATA__?.cpi_graph,
+            seriesKind: "cpi_series",
+            observationKind: "cpi_observation",
+            seriesPrefix: "cpi-series:",
+            observationPrefix: "cpi-obs:",
+          },
+          {
+            domain: "Labor",
+            color: 0x7bd389,
+            graph: window.__LABOR_KG_DASHBOARD_DATA__?.labor_graph,
+            seriesKind: "labor_series",
+            observationKind: "labor_observation",
+            seriesPrefix: "labor-series:",
+            observationPrefix: "labor-obs:",
+          },
+          {
+            domain: "Treasury",
+            color: 0xf2cc60,
+            graph: window.__TREASURY_DASHBOARD_DATA__?.treasury_graph,
+            seriesKind: "treasury_series",
+            observationKind: "treasury_observation",
+            seriesPrefix: "treasury-series:",
+            observationPrefix: "treasury-obs:",
+          },
+        ];
+
+        const series = [];
+        configs.forEach((config) => {
+          const grouped = new Map();
+          extractGraphObservations({ ...config, perSeriesLimit }).forEach((point) => {
+            const key = `${config.domain}:${point.seriesKey}`;
+            if (!grouped.has(key)) {
+              grouped.set(key, { key, domain: config.domain, color: config.color, label: point.seriesLabel, points: [] });
+            }
+            grouped.get(key).points.push(point);
+          });
+          grouped.forEach((entry) => {
+            entry.points.sort((a, b) => a.timestamp - b.timestamp);
+            const changes = [];
+            for (let i = 1; i < entry.points.length; i += 1) {
+              const prev = entry.points[i - 1].value;
+              const curr = entry.points[i].value;
+              changes.push((curr - prev) / Math.max(Math.abs(prev), 0.0001));
+            }
+            if (changes.length < 3) return;
+            const mean = changes.reduce((sum, v) => sum + v, 0) / changes.length;
+            const variance = changes.reduce((sum, v) => sum + (v - mean) ** 2, 0) / changes.length;
+            const recent = changes.slice(-3);
+            const trend = recent.reduce((sum, v) => sum + v, 0) / recent.length;
+            series.push({
+              ...entry,
+              changes,
+              volatility: Math.sqrt(variance),
+              trend,
+              latest: entry.points[entry.points.length - 1],
+            });
+          });
+        });
+        return series;
+      }
+
+      function buildGraphExperiment4(scene, context) {
+        const signalChildren = context.signals.map((signal) => {
+          const label = String(signal?.label || "Signal");
+          const score = Number(signal?.score || 3);
+          const isBias = label.toLowerCase().includes("bias");
+          const bias = isBias ? context.previousBias : clamp((score - 3) / 2, -1, 1);
+          return { label, weight: clamp(score / 5, 0.2, 1), bias, detail: isBias ? `${bias >= 0 ? "+" : ""}${bias.toFixed(2)}` : `${score}/5` };
+        });
+
+        const groupByCategory = (values, domainKey, domainBias) => {
+          const byCategory = new Map();
+          (values || []).forEach((item) => {
+            const category = String(item?.category || "other");
+            if (!byCategory.has(category)) byCategory.set(category, []);
+            byCategory.get(category).push(item);
+          });
+          return [...byCategory.entries()].map(([category, members]) => {
+            const weight = categoryWeight(domainKey, category);
+            return {
+              label: category,
+              weight,
+              bias: clamp(domainBias * weight, -1, 1),
+              detail: `${members.length} series · w ${weight.toFixed(2)}`,
+            };
+          }).sort((a, b) => b.weight - a.weight);
+        };
+
+        const treasuryChildren = (context.treasuryData?.points || []).map((item) => {
+          const change = Number(item?.change_value || 0);
+          return {
+            label: String(item?.maturity || item?.label || "UST"),
+            weight: clamp(0.4 + Math.abs(change) / 0.2, 0.2, 1),
+            bias: clamp(change / 0.15, -1, 1),
+            detail: `${Number(item?.yield_pct || 0).toFixed(2)}%`,
+          };
+        });
+
+        const domains = [
+          { label: "FOMC Statement", color: 0xffa657, bias: context.previousBias, children: signalChildren },
+          {
+            label: "Markets",
+            color: 0x79c0ff,
+            bias: context.marketBias,
+            children: [
+              { label: "Raise", weight: clamp(context.marketRaise, 0.05, 1), bias: 1, detail: `${Math.round(context.marketRaise * 100)}%` },
+              { label: "Hold", weight: clamp(context.marketHold, 0.05, 1), bias: 0, detail: `${Math.round(context.marketHold * 100)}%` },
+              { label: "Cut", weight: clamp(context.marketCut, 0.05, 1), bias: -1, detail: `${Math.round(context.marketCut * 100)}%` },
+            ],
+          },
+          { label: "CPI", color: 0xff7b72, bias: context.cpiBias, children: groupByCategory(context.cpiData?.latest_values, "cpi", context.cpiBias) },
+          { label: "Labor", color: 0x7bd389, bias: context.laborBias, children: groupByCategory(context.laborData?.latest_values, "labor", context.laborBias) },
+          { label: "Treasuries", color: 0xf2cc60, bias: context.treasurySlopeBias, children: treasuryChildren },
+        ].filter((domain) => domain.children.length);
+
+        const domainWeights = domains.map((domain) => domain.children.reduce((sum, child) => sum + child.weight, 0));
+        const totalWeight = Math.max(0.0001, domainWeights.reduce((sum, value) => sum + value, 0));
+        const maxDomainWeight = Math.max(...domainWeights, 0.0001);
+        const overallBias = clamp(
+          domains.reduce((sum, domain, index) => sum + domain.bias * domainWeights[index], 0) / totalWeight,
+          -1,
+          1,
+        );
+
+        const hub = [0, -2.0, 0];
+        makeNode(scene, hub[0], hub[1], hub[2], biasToColorHex(overallBias), 0.58, context.meetingLabel, `net bias ${overallBias >= 0 ? "+" : ""}${overallBias.toFixed(2)}`);
+
+        const domainRadius = 3.2;
+        const childRadius = 6.4;
+        const gap = 0.09;
+        let cursor = -Math.PI / 2;
+
+        domains.forEach((domain, index) => {
+          const share = domainWeights[index] / totalWeight;
+          const span = Math.max(0.25, share * (Math.PI * 2 - gap * domains.length));
+          const start = cursor + gap / 2;
+          const end = start + span;
+          const mid = (start + end) / 2;
+          cursor = end + gap / 2;
+
+          const domainPos = [Math.cos(mid) * domainRadius, 0.2, Math.sin(mid) * domainRadius];
+          const domainColor = biasToColorHex(domain.bias);
+          addArc(scene, domainRadius, 0.2, start, end, domain.color, 0.45);
+          makeNode(
+            scene,
+            domainPos[0],
+            domainPos[1],
+            domainPos[2],
+            domainColor,
+            importanceRadius(domainWeights[index] / maxDomainWeight, 0.16, 0.5),
+            domain.label,
+            `${Math.round(share * 100)}% of weight`,
+          );
+          addEdge(scene, hub, domainPos, domain.color, 0.3);
+
+          const childTotal = Math.max(0.0001, domain.children.reduce((sum, child) => sum + child.weight, 0));
+          let childCursor = start;
+          domain.children.forEach((child, childIndex) => {
+            const childShare = child.weight / childTotal;
+            const childSpan = span * childShare;
+            const childStart = childCursor;
+            const childEnd = childCursor + childSpan;
+            const childMid = (childStart + childEnd) / 2;
+            childCursor = childEnd;
+
+            const y = 2.4 + (childIndex % 2) * 0.55;
+            const pos = [Math.cos(childMid) * childRadius, y, Math.sin(childMid) * childRadius];
+            const color = biasToColorHex(child.bias);
+            addArc(scene, childRadius, y, childStart, childEnd, domain.color, 0.32);
+            makeNode(scene, pos[0], pos[1], pos[2], color, importanceRadius(childShare * 1.6, 0.06, 0.3), child.label, child.detail);
+            addEdge(scene, domainPos, pos, color, 0.22);
+          });
+        });
+
+        addReferenceGrid(scene);
+      }
+
+      function buildGraphExperiment5(scene, context) {
+        const allSeries = collectDomainSeries(12)
+          .sort((a, b) => b.volatility - a.volatility)
+          .slice(0, 16);
+
+        makeNode(scene, 0, 4.2, 0, 0x8dc8ff, 0.34, "Correlation Web", "edges = co-movement");
+        if (allSeries.length < 2) {
+          addReferenceGrid(scene);
+          return;
+        }
+
+        const maxVolatility = Math.max(...allSeries.map((item) => item.volatility), 0.0001);
+        const maxTrend = Math.max(...allSeries.map((item) => Math.abs(item.trend)), 0.0001);
+        const domains = [...new Set(allSeries.map((item) => item.domain))];
+
+        const nodes = allSeries.map((series, index) => {
+          const domainIndex = domains.indexOf(series.domain);
+          const sectorSpan = (Math.PI * 2) / domains.length;
+          const withinDomain = allSeries.filter((item) => item.domain === series.domain);
+          const positionInDomain = withinDomain.indexOf(series);
+          const angle = domainIndex * sectorSpan + ((positionInDomain + 0.5) / withinDomain.length) * sectorSpan * 0.85;
+          const radius = 3.0 + (index % 3) * 0.7;
+          return {
+            series,
+            x: Math.cos(angle) * radius,
+            y: (domainIndex - (domains.length - 1) / 2) * 1.5,
+            z: Math.sin(angle) * radius,
+          };
+        });
+
+        const links = [];
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const corr = pearson(nodes[i].series.changes, nodes[j].series.changes);
+            if (Math.abs(corr) >= 0.55) links.push({ a: i, b: j, corr });
+          }
+        }
+
+        // Deterministic spring relaxation: correlated series pull together, everything else pushes apart.
+        for (let iteration = 0; iteration < 140; iteration += 1) {
+          const forces = nodes.map(() => [0, 0, 0]);
+          for (let i = 0; i < nodes.length; i += 1) {
+            for (let j = i + 1; j < nodes.length; j += 1) {
+              const dx = nodes[j].x - nodes[i].x;
+              const dy = nodes[j].y - nodes[i].y;
+              const dz = nodes[j].z - nodes[i].z;
+              const dist = Math.max(0.35, Math.sqrt(dx * dx + dy * dy + dz * dz));
+              const push = 1.5 / (dist * dist);
+              forces[i][0] -= (dx / dist) * push;
+              forces[i][1] -= (dy / dist) * push;
+              forces[i][2] -= (dz / dist) * push;
+              forces[j][0] += (dx / dist) * push;
+              forces[j][1] += (dy / dist) * push;
+              forces[j][2] += (dz / dist) * push;
+            }
+          }
+          links.forEach((link) => {
+            const a = nodes[link.a];
+            const b = nodes[link.b];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dz = b.z - a.z;
+            const dist = Math.max(0.35, Math.sqrt(dx * dx + dy * dy + dz * dz));
+            const pull = (dist - 2.2) * 0.05 * Math.abs(link.corr);
+            forces[link.a][0] += (dx / dist) * pull;
+            forces[link.a][1] += (dy / dist) * pull;
+            forces[link.a][2] += (dz / dist) * pull;
+            forces[link.b][0] -= (dx / dist) * pull;
+            forces[link.b][1] -= (dy / dist) * pull;
+            forces[link.b][2] -= (dz / dist) * pull;
+          });
+          nodes.forEach((node, index) => {
+            node.x = clamp(node.x + forces[index][0] * 0.16, -6.5, 6.5);
+            node.y = clamp(node.y + forces[index][1] * 0.16, -3.0, 3.4);
+            node.z = clamp(node.z + forces[index][2] * 0.16, -6.5, 6.5);
+          });
+        }
+
+        links.forEach((link) => {
+          const a = nodes[link.a];
+          const b = nodes[link.b];
+          const color = link.corr >= 0 ? 0xff7b72 : 0x58a6ff;
+          addEdge(scene, [a.x, a.y, a.z], [b.x, b.y, b.z], color, clamp(Math.abs(link.corr) * 0.45, 0.08, 0.45));
+        });
+
+        nodes.forEach((node) => {
+          const series = node.series;
+          const importance = clamp(series.volatility / maxVolatility, 0.1, 1);
+          const bias = clamp(series.trend / maxTrend, -1, 1);
+          const degree = links.filter((link) => nodes[link.a] === node || nodes[link.b] === node).length;
+          makeNode(
+            scene,
+            node.x,
+            node.y,
+            node.z,
+            biasToColorHex(bias),
+            importanceRadius(importance, 0.08, 0.36),
+            series.label,
+            `${series.domain} · ${degree} links · ${series.latest.value.toFixed(2)}`,
+          );
+        });
+
+        addReferenceGrid(scene);
+      }
+
+      // Shared model: how the focused meeting's bias falls out of its inputs.
+      function biasModel(context, overrides = {}) {
+        const cpi = overrides.cpi ?? context.cpiBias;
+        const labor = overrides.labor ?? context.laborBias;
+        const treasury = overrides.treasury ?? context.treasurySlopeBias;
+        const previous = overrides.previous ?? context.previousBias;
+        const carry = clamp(overrides.carry ?? (context.carryFromPrevious || 0.4), 0, 1);
+        const macro = clamp(0.45 * cpi + 0.35 * labor + 0.2 * treasury, -1, 1);
+        const bias = clamp(previous * carry + macro * (1 - carry), -1, 1);
+        const probabilities = probabilitiesFromBias(bias, context.focus?.confidence ?? 0.45);
+        const decision = Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0][0];
+        return { bias, macro, probabilities, decision };
+      }
+
+      function buildGraphExperiment6(scene, context) {
+        const sourceX = -6.4;
+        const domainX = -1.2;
+        const outcomeX = 5.2;
+
+        const groupCategories = (values, domainKey) => {
+          const byCategory = new Map();
+          (values || []).forEach((item) => {
+            const category = String(item?.category || "other");
+            byCategory.set(category, (byCategory.get(category) || 0) + 1);
+          });
+          return [...byCategory.entries()].map(([category, count]) => ({
+            label: category,
+            weight: categoryWeight(domainKey, category),
+            count,
+          }));
+        };
+
+        const domains = [
+          {
+            label: "FOMC Statement",
+            color: 0xffa657,
+            bias: context.previousBias,
+            weight: 1.0,
+            sources: (context.signals || []).map((signal) => ({
+              label: String(signal?.label || "Signal"),
+              weight: clamp(Number(signal?.score || 3) / 5, 0.2, 1),
+              count: Number(signal?.mentions || 0),
+            })),
+          },
+          {
+            label: "Markets",
+            color: 0x79c0ff,
+            bias: context.marketBias,
+            weight: 0.95,
+            sources: Object.entries(context.marketData?.providers || {}).map(([provider, payload]) => ({
+              label: provider,
+              weight: 0.8,
+              count: Object.keys(payload?.probabilities || {}).length,
+            })),
+          },
+          { label: "CPI", color: 0xff7b72, bias: context.cpiBias, weight: 0.9, sources: groupCategories(context.cpiData?.latest_values, "cpi") },
+          { label: "Labor", color: 0x7bd389, bias: context.laborBias, weight: 0.85, sources: groupCategories(context.laborData?.latest_values, "labor") },
+          {
+            label: "Treasuries",
+            color: 0xf2cc60,
+            bias: context.treasurySlopeBias,
+            weight: 0.6,
+            sources: (context.treasuryData?.points || []).map((item) => ({
+              label: String(item?.maturity || "UST"),
+              weight: 0.6,
+              count: 1,
+            })),
+          },
+        ].filter((domain) => domain.sources.length);
+
+        const outcomes = [
+          { key: "raise", label: "RAISE", bias: 1, prob: context.marketRaise, y: 2.6 },
+          { key: "hold", label: "HOLD", bias: 0, prob: context.marketHold, y: 0.0 },
+          { key: "cut", label: "CUT", bias: -1, prob: context.marketCut, y: -2.6 },
+        ];
+        outcomes.forEach((outcome) => {
+          makeNode(
+            scene,
+            outcomeX,
+            outcome.y,
+            0,
+            biasToColorHex(outcome.bias),
+            importanceRadius(clamp(outcome.prob, 0, 1), 0.16, 0.62),
+            outcome.label,
+            `${Math.round(outcome.prob * 100)}% · ${context.focus?.label || ""}`,
+          );
+        });
+
+        const domainSpacing = 1.55;
+        const domainStartY = ((domains.length - 1) / 2) * domainSpacing;
+        domains.forEach((domain, domainIndex) => {
+          const domainY = domainStartY - domainIndex * domainSpacing;
+          const domainPos = [domainX, domainY, 0];
+          makeNode(
+            scene,
+            domainPos[0],
+            domainPos[1],
+            domainPos[2],
+            biasToColorHex(domain.bias),
+            importanceRadius(domain.weight, 0.14, 0.4),
+            domain.label,
+            `bias ${domain.bias >= 0 ? "+" : ""}${domain.bias.toFixed(2)} · w ${domain.weight.toFixed(2)}`,
+          );
+
+          const sourceSpacing = 0.62;
+          const sourceStartY = domainY + ((domain.sources.length - 1) / 2) * sourceSpacing;
+          domain.sources.forEach((source, sourceIndex) => {
+            const sourceY = sourceStartY - sourceIndex * sourceSpacing;
+            const z = (sourceIndex % 3 - 1) * 0.5;
+            const pos = [sourceX, sourceY, z];
+            makeNode(
+              scene,
+              pos[0],
+              pos[1],
+              pos[2],
+              domain.color,
+              importanceRadius(source.weight, 0.05, 0.2),
+              source.label,
+              source.count ? `${source.count}` : "",
+            );
+            addFlow(scene, pos, domainPos, domain.color, source.weight * 0.6);
+          });
+
+          // Split each domain's weight across the three outcomes by the sign of its bias.
+          const raiseShare = Math.max(0, domain.bias);
+          const cutShare = Math.max(0, -domain.bias);
+          const holdShare = 1 - Math.abs(domain.bias);
+          const shares = { raise: raiseShare, hold: holdShare, cut: cutShare };
+          outcomes.forEach((outcome) => {
+            const share = shares[outcome.key] * domain.weight;
+            if (share <= 0.02) return;
+            addFlow(scene, domainPos, [outcomeX, outcome.y, 0], biasToColorHex(outcome.bias), share);
+          });
+        });
+
+        addReferenceGrid(scene);
+      }
+
+      function buildGraphExperiment7(scene, context) {
+        const domainSeries = collectDomainSeries(12);
+        const volatilityFor = (domain) => {
+          const matches = domainSeries.filter((series) => series.domain === domain);
+          if (!matches.length) return 0.18;
+          const mean = matches.reduce((sum, series) => sum + series.volatility, 0) / matches.length;
+          return clamp(mean * 9, 0.06, 0.4);
+        };
+
+        const sigmaCpi = volatilityFor("CPI");
+        const sigmaLabor = volatilityFor("Labor");
+        const sigmaTreasury = volatilityFor("Treasury");
+        const sigmaCarry = clamp(0.5 * (1 - (context.carryFromPrevious || 0.4)), 0.05, 0.3);
+
+        const baseline = biasModel(context);
+        const random = mulberry32(20260916);
+        const draws = 520;
+        const cloud = [];
+        const tally = { raise: 0, hold: 0, cut: 0 };
+        let biasSum = 0;
+
+        for (let i = 0; i < draws; i += 1) {
+          const cpiShock = gaussian(random) * sigmaCpi;
+          const laborShock = gaussian(random) * sigmaLabor;
+          const treasuryShock = gaussian(random) * sigmaTreasury;
+          const carryShock = gaussian(random) * sigmaCarry;
+          const sample = biasModel(context, {
+            cpi: clamp(context.cpiBias + cpiShock, -1, 1),
+            labor: clamp(context.laborBias + laborShock, -1, 1),
+            treasury: clamp(context.treasurySlopeBias + treasuryShock, -1, 1),
+            carry: clamp((context.carryFromPrevious || 0.4) + carryShock, 0, 1),
+          });
+          biasSum += sample.bias;
+
+          // Sample an actual outcome so the cloud shows the decision distribution, not just the mode.
+          const roll = random();
+          const outcome = roll < sample.probabilities.raise
+            ? "raise"
+            : roll < sample.probabilities.raise + sample.probabilities.hold
+              ? "hold"
+              : "cut";
+          tally[outcome] += 1;
+
+          cloud.push({
+            position: [sample.bias * 5.4, clamp(laborShock * 7, -3.0, 3.0), clamp(cpiShock * 7, -3.4, 3.4)],
+            color: biasToColorHex(DECISION_BIAS[outcome]),
+          });
+        }
+
+        addPointCloud(scene, cloud, 0.13);
+
+        const meanBias = biasSum / draws;
+        makeNode(
+          scene,
+          meanBias * 5.4,
+          0,
+          0,
+          biasToColorHex(meanBias),
+          0.34,
+          `${context.focus?.label || "Meeting"} mean path`,
+          `bias ${meanBias >= 0 ? "+" : ""}${meanBias.toFixed(2)} over ${draws} sims`,
+        );
+        makeNode(
+          scene,
+          baseline.bias * 5.4,
+          0,
+          0,
+          0x8dc8ff,
+          0.16,
+          "no-shock baseline",
+          `bias ${baseline.bias >= 0 ? "+" : ""}${baseline.bias.toFixed(2)}`,
+        );
+
+        addEdge(scene, [-5.8, -3.6, 0], [5.8, -3.6, 0], 0xffffff, 0.18);
+        [
+          { key: "cut", bias: -1, label: "CUT" },
+          { key: "hold", bias: 0, label: "HOLD" },
+          { key: "raise", bias: 1, label: "RAISE" },
+        ].forEach((outcome) => {
+          const share = tally[outcome.key] / draws;
+          const x = outcome.bias * 4.6;
+          addBar(scene, x - 0.4, x + 0.4, -3.6 + share * 2.2, 0, biasToColorHex(outcome.bias), 0.5);
+          makeNode(
+            scene,
+            x,
+            -3.6 + share * 2.2 + 0.5,
+            0,
+            biasToColorHex(outcome.bias),
+            importanceRadius(share, 0.1, 0.4),
+            outcome.label,
+            `${Math.round(share * 100)}% of sims`,
+          );
+        });
+
+        makeNode(scene, 0, 3.9, 0, 0x8dc8ff, 0.12, "shock axes", `z = CPI shock (σ ${sigmaCpi.toFixed(2)}), y = labor shock (σ ${sigmaLabor.toFixed(2)})`);
+        addReferenceGrid(scene);
+      }
+
+      function buildGraphExperiment8(scene, context) {
+        const baseline = biasModel(context);
+        const step = 0.05;
+
+        const inputs = [
+          { key: "cpi", label: "CPI Bias", base: context.cpiBias, color: 0xff7b72, min: -1, max: 1 },
+          { key: "labor", label: "Labor Bias", base: context.laborBias, color: 0x7bd389, min: -1, max: 1 },
+          { key: "treasury", label: "Curve Bias", base: context.treasurySlopeBias, color: 0xf2cc60, min: -1, max: 1 },
+          { key: "previous", label: "Prior Meeting Bias", base: context.previousBias, color: 0xffa657, min: -1, max: 1 },
+          { key: "carry", label: "Carry-over", base: clamp(context.carryFromPrevious || 0.4, 0, 1), color: 0x79c0ff, min: 0, max: 1 },
+        ];
+
+        const rows = inputs.map((input) => {
+          const swingUp = biasModel(context, { [input.key]: clamp(input.base + 0.25, input.min, input.max) }).bias;
+          const swingDown = biasModel(context, { [input.key]: clamp(input.base - 0.25, input.min, input.max) }).bias;
+          const sensitivity = (swingUp - swingDown) / 2;
+
+          let flipDelta = null;
+          let flipDecision = null;
+          for (let delta = step; delta <= 2 && flipDelta === null; delta += step) {
+            const up = biasModel(context, { [input.key]: clamp(input.base + delta, input.min, input.max) });
+            if (up.decision !== baseline.decision) {
+              flipDelta = delta;
+              flipDecision = up.decision;
+              break;
+            }
+            const down = biasModel(context, { [input.key]: clamp(input.base - delta, input.min, input.max) });
+            if (down.decision !== baseline.decision) {
+              flipDelta = -delta;
+              flipDecision = down.decision;
+            }
+          }
+          return { ...input, sensitivity, flipDelta, flipDecision };
+        }).sort((a, b) => Math.abs(b.sensitivity) - Math.abs(a.sensitivity));
+
+        const maxSensitivity = Math.max(...rows.map((row) => Math.abs(row.sensitivity)), 0.0001);
+        const spacing = 1.3;
+        const startY = ((rows.length - 1) / 2) * spacing;
+
+        makeNode(
+          scene,
+          0,
+          startY + 1.6,
+          0,
+          biasToColorHex(baseline.bias),
+          0.4,
+          `${context.focus?.label || "Meeting"} · ${baseline.decision.toUpperCase()}`,
+          `model bias ${baseline.bias >= 0 ? "+" : ""}${baseline.bias.toFixed(2)}`,
+        );
+        addEdge(scene, [0, startY + 1.2, 0], [0, -startY - 1.2, 0], 0xffffff, 0.2);
+
+        rows.forEach((row, index) => {
+          const y = startY - index * spacing;
+          const length = (row.sensitivity / maxSensitivity) * 4.6;
+          addBar(scene, 0, length, y, 0, biasToColorHex(clamp(row.sensitivity * 4, -1, 1)), 0.34);
+          makeNode(
+            scene,
+            length + Math.sign(length || 1) * 0.5,
+            y,
+            0,
+            row.color,
+            importanceRadius(Math.abs(row.sensitivity) / maxSensitivity, 0.1, 0.34),
+            row.label,
+            `Δbias ${row.sensitivity >= 0 ? "+" : ""}${row.sensitivity.toFixed(3)} per +0.25`,
+          );
+
+          if (row.flipDelta === null) {
+            makeNode(scene, -5.6, y, 0, 0x30475e, 0.07, "", "no flip within ±2.0");
+            return;
+          }
+          const flipX = clamp(-1.4 - Math.abs(row.flipDelta) * 2.0, -6.2, -1.4);
+          makeNode(
+            scene,
+            flipX,
+            y,
+            0,
+            biasToColorHex(DECISION_BIAS[row.flipDecision] ?? 0),
+            importanceRadius(clamp(1 - Math.abs(row.flipDelta) / 2, 0, 1), 0.06, 0.26),
+            `flips to ${String(row.flipDecision).toUpperCase()}`,
+            `at ${row.flipDelta >= 0 ? "+" : ""}${row.flipDelta.toFixed(2)}`,
+          );
+          addEdge(scene, [flipX, y, 0], [0, y, 0], biasToColorHex(DECISION_BIAS[row.flipDecision] ?? 0), 0.2);
+        });
+
+        addReferenceGrid(scene);
+      }
+
+      function buildGraph(scene, experimentId) {
+        const context = buildCoreContext();
+        if (experimentId === "experiment-2") {
+          buildGraphExperiment2(scene, context);
+        } else if (experimentId === "experiment-3") {
+          buildGraphExperiment3(scene, context);
+        } else if (experimentId === "experiment-4") {
+          buildGraphExperiment4(scene, context);
+        } else if (experimentId === "experiment-5") {
+          buildGraphExperiment5(scene, context);
+        } else if (experimentId === "experiment-6") {
+          buildGraphExperiment6(scene, context);
+        } else if (experimentId === "experiment-7") {
+          buildGraphExperiment7(scene, context);
+        } else if (experimentId === "experiment-8") {
+          buildGraphExperiment8(scene, context);
+        } else {
+          buildGraphExperiment1(scene, context);
+        }
+        const view = EXPERIMENT_VIEWS[experimentId] || EXPERIMENT_VIEWS["experiment-1"];
+        addMeetingChain(scene, context, view.chainY ?? 5.4);
+        return context;
+      }
+
+      function renderMeetingControls(container, context) {
+        const bar = document.createElement("div");
+        bar.style.cssText = `position:absolute;top:10px;left:10px;right:10px;display:flex;gap:6px;
+          align-items:center;flex-wrap:wrap;z-index:3;
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;`;
+
+        const anchorOffset = Number(window.__KG_MEETING_OFFSET__ || 0);
+        const makeButton = (text, title, disabled, onClick, active) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = text;
+          button.title = title;
+          button.disabled = disabled;
+          button.style.cssText = `padding:4px 10px;border-radius:999px;font-size:11px;font-weight:${active ? 700 : 500};
+            cursor:${disabled ? "default" : "pointer"};opacity:${disabled ? 0.35 : 1};
+            border:1px solid ${active ? "rgba(141,200,255,0.65)" : "rgba(141,200,255,0.22)"};
+            background:${active ? "rgba(141,200,255,0.22)" : "rgba(8,17,31,0.85)"};
+            color:${active ? "#8dc8ff" : "#93a3bd"};`;
+          if (!disabled) button.addEventListener("click", onClick);
+          return button;
+        };
+
+        const anchorIndex = context.focusIndex - anchorOffset;
+        const lowerBound = -anchorIndex;
+        const upperBound = context.chain.length - 1 - anchorIndex;
+
+        bar.appendChild(makeButton("‹ Earlier", "Step one meeting back", anchorOffset <= lowerBound, () => {
+          window.__KG_MEETING_OFFSET__ = anchorOffset - 1;
+          init(window.__KG_EXPERIMENT__);
+        }));
+
+        context.chain.forEach((entry, index) => {
+          const targetOffset = index - anchorIndex;
+          const active = index === context.focusIndex;
+          const statusMark = entry.status === "held" ? "✓" : entry.status === "priced" ? "◉" : "◇";
+          bar.appendChild(makeButton(
+            `${statusMark} ${entry.label}`,
+            `${entry.status} · ${entry.detail}`,
+            false,
+            () => {
+              window.__KG_MEETING_OFFSET__ = targetOffset;
+              init(window.__KG_EXPERIMENT__);
+            },
+            active,
+          ));
+        });
+
+        bar.appendChild(makeButton("Later ›", "Step one meeting forward", anchorOffset >= upperBound, () => {
+          window.__KG_MEETING_OFFSET__ = anchorOffset + 1;
+          init(window.__KG_EXPERIMENT__);
+        }));
+
+        const focus = context.chain[context.focusIndex];
+        const info = document.createElement("span");
+        info.style.cssText = "font-size:10px;color:#93a3bd;padding-left:4px;";
+        info.textContent = context.previous
+          ? `${context.previous.label} → ${focus.label}: ${Math.round((focus.carry ?? 0) * 100)}% carry-over, ${focus.releases || 0} new prints in between`
+          : `${focus.label}: no prior meeting in range`;
+        bar.appendChild(info);
+
+        container.appendChild(bar);
+      }
+
+      function renderLegend(container, experimentId) {
+        const view = EXPERIMENT_VIEWS[experimentId] || EXPERIMENT_VIEWS["experiment-1"];
+        const legend = document.createElement("div");
+        legend.style.cssText = `position:absolute;left:10px;right:10px;bottom:8px;z-index:3;pointer-events:none;
+          font-size:10.5px;line-height:1.5;color:#93a3bd;background:rgba(8,17,31,0.82);
+          border:1px solid rgba(141,200,255,0.16);border-radius:8px;padding:6px 10px;
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;`;
+        legend.innerHTML = `${view.legend}<br />Meeting chain: ✓ held · ◉ market-priced · ◇ projected; link opacity = carry-over from the prior meeting.`;
+        container.appendChild(legend);
+      }
+
+      function init(experimentId = "experiment-1") {
+        const selectedExperiment = experimentId || window.__KG_EXPERIMENT__ || "experiment-1";
+        window.__KG_EXPERIMENT__ = selectedExperiment;
+        const view = EXPERIMENT_VIEWS[selectedExperiment] || EXPERIMENT_VIEWS["experiment-1"];
         const container = document.getElementById("kg-canvas");
         if (!container) return;
         dispose();
@@ -1590,7 +2996,7 @@
         scene.fog        = new THREE.FogExp2(0x08111f, 0.052);
 
         const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 100);
-        camera.position.set(0, 3.5, 10);
+        camera.position.set(view.camera[0], view.camera[1], view.camera[2]);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(W, H);
@@ -1612,10 +3018,14 @@
         controls.dampingFactor   = 0.06;
         controls.autoRotate      = true;
         controls.autoRotateSpeed = 0.5;
-        controls.minDistance     = 4;
-        controls.maxDistance     = 22;
+        controls.minDistance     = view.distance[0];
+        controls.maxDistance     = view.distance[1];
+        controls.target.set(view.target[0], view.target[1], view.target[2]);
+        controls.update();
 
-        buildGraph(scene);
+        const context = buildGraph(scene, selectedExperiment);
+        renderMeetingControls(container, context);
+        renderLegend(container, selectedExperiment);
 
         let animId;
         function animate() {
