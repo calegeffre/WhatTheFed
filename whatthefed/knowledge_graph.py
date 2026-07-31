@@ -25,6 +25,7 @@ TOPIC_KEYWORDS = {
 }
 MEETING_KINDS = frozenset({"meeting_note", "fomc_statement", "fomc_minutes"})
 MARKET_KINDS = frozenset({"kalshi_market", "polymarket_market", "market_signal"})
+CPI_KINDS = frozenset({"cpi_observation", "cpi_metric", "labor_observation", "labor_metric"})
 EXCLUDED_NAME_MATCHES = {"Vice Chair"}
 
 
@@ -161,6 +162,8 @@ class KnowledgeGraphBuilder:
             self._add_meeting_structure(graph, document_id, document)
         if document.kind in MARKET_KINDS:
             self._add_market_structure(graph, document_id, document)
+        if document.kind in CPI_KINDS:
+            self._add_cpi_structure(graph, document_id, document)
 
     def _add_meeting_structure(self, graph: KnowledgeGraph, document_id: str, document: Document) -> None:
         meeting_id = self._meeting_node_id(document)
@@ -256,6 +259,71 @@ class KnowledgeGraphBuilder:
             graph.add_edge(GraphEdge(source=snapshot_id, target=meeting_id, relation="targets_meeting"))
 
         self._add_topic_links(graph, snapshot_id, document.content)
+
+    def _add_cpi_structure(self, graph: KnowledgeGraph, document_id: str, document: Document) -> None:
+        metadata = dict(document.metadata)
+        series_id = str(metadata.get("series_id") or document.source)
+        series_label = str(metadata.get("series_label") or series_id)
+        observation_date = str(metadata.get("observation_date") or document.published_at or "unknown")
+        metric_namespace = "labor" if document.kind.startswith("labor_") else "cpi"
+        category = str(metadata.get("category") or metric_namespace)
+
+        series_node_id = f"{metric_namespace}_series:{series_id}"
+        graph.add_node(
+            GraphNode(
+                id=series_node_id,
+                kind=f"{metric_namespace}_series",
+                label=series_label,
+                properties={
+                    "series_id": series_id,
+                    "category": category,
+                },
+            )
+        )
+        graph.add_edge(
+            GraphEdge(source=document_id, target=series_node_id, relation=f"describes_{metric_namespace}_series")
+        )
+
+        observation_node_id = f"{metric_namespace}_observation:{series_id}:{observation_date}"
+        graph.add_node(
+            GraphNode(
+                id=observation_node_id,
+                kind=f"{metric_namespace}_observation",
+                label=observation_date,
+                properties={
+                    "series_id": series_id,
+                    "observation_date": observation_date,
+                    "value": metadata.get("value"),
+                    "source_url": document.source_url,
+                },
+            )
+        )
+        graph.add_edge(
+            GraphEdge(source=series_node_id, target=observation_node_id, relation=f"has_{metric_namespace}_observation")
+        )
+
+        metric_key = metadata.get("metric_key")
+        if metric_key is not None:
+            metric_node_id = f"{metric_namespace}_metric:{metric_key}:{observation_date}"
+            graph.add_node(
+                GraphNode(
+                    id=metric_node_id,
+                    kind=f"{metric_namespace}_metric",
+                    label=str(metric_key),
+                    properties={
+                        "metric_key": metric_key,
+                        "metric_value": metadata.get("metric_value"),
+                        "metric_date": observation_date,
+                    },
+                )
+            )
+            graph.add_edge(
+                GraphEdge(
+                    source=observation_node_id,
+                    target=metric_node_id,
+                    relation="observation_contributes_to_metric",
+                )
+            )
 
     def _add_topic_links(self, graph: KnowledgeGraph, source_id: str, text: str) -> None:
         lowered = text.lower()

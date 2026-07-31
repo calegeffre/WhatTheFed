@@ -471,10 +471,18 @@
     window.__FOMC_DASHBOARD_DATA__ = window.__FOMC_DASHBOARD_DATA__ || null;
     window.__FOMC_HISTORY_DATA__ = window.__FOMC_HISTORY_DATA__ || null;
     window.__MARKET_DASHBOARD_DATA__ = window.__MARKET_DASHBOARD_DATA__ || null;
+    window.__CPI_DASHBOARD_DATA__ = window.__CPI_DASHBOARD_DATA__ || null;
+    window.__KG_DASHBOARD_DATA__ = window.__KG_DASHBOARD_DATA__ || null;
+    window.__LABOR_DASHBOARD_DATA__ = window.__LABOR_DASHBOARD_DATA__ || null;
+    window.__LABOR_KG_DASHBOARD_DATA__ = window.__LABOR_KG_DASHBOARD_DATA__ || null;
   </script>
   <script src="data/fomc_dashboard_data.js"></script>
   <script src="data/fomc_history_data.js"></script>
   <script src="data/market_dashboard_data.js"></script>
+  <script src="data/cpi_dashboard_data.js"></script>
+  <script src="data/kg_dashboard_data.js"></script>
+  <script src="data/labor_dashboard_data.js"></script>
+  <script src="data/labor_kg_dashboard_data.js"></script>
   <script>
     const dashboardData = {
       next_meeting_prediction: {
@@ -566,6 +574,8 @@
 
     const fomcOverlay = window.__FOMC_DASHBOARD_DATA__;
     const marketOverlay = window.__MARKET_DASHBOARD_DATA__;
+    const cpiOverlay = window.__CPI_DASHBOARD_DATA__;
+    const laborOverlay = window.__LABOR_DASHBOARD_DATA__;
     const normalizeTriplet = (values) => {
       const parsed = {
         raise: Number(values?.raise || 0),
@@ -637,6 +647,16 @@
       });
     })();
 
+    const cpiHeatCards = (() => {
+      if (!cpiOverlay || !cpiOverlay.heat_card) return [];
+      return [cpiOverlay.heat_card];
+    })();
+
+    const laborHeatCards = (() => {
+      if (!laborOverlay || !laborOverlay.heat_card) return [];
+      return [laborOverlay.heat_card];
+    })();
+
     const fomcHeatCards = (() => {
       if (!fomcOverlay || !Array.isArray(fomcOverlay.signals) || !fomcOverlay.signals.length) {
         return dashboardData.dashboard.next_meeting_heat_map;
@@ -655,7 +675,7 @@
     })();
 
     const activePrediction = marketPrediction || dashboardData.next_meeting_prediction;
-    const combinedHeatMap = [...fomcHeatCards, ...marketHeatCards];
+    const combinedHeatMap = [...fomcHeatCards, ...cpiHeatCards, ...laborHeatCards, ...marketHeatCards];
 
     const nextMeetingDate = marketOverlay?.target_meeting || fomcOverlay?.meeting_date || "N/A";
     document.getElementById("summary").textContent =
@@ -674,6 +694,12 @@
     if (marketOverlay) {
       sourceItems.add(`market:${marketOverlay.target_meeting}`);
       Object.keys(marketOverlay.providers || {}).forEach((provider) => sourceItems.add(`market:${provider}`));
+    }
+    if (cpiOverlay) {
+      sourceItems.add(`cpi:${cpiOverlay.metric_date || "latest"}`);
+    }
+    if (laborOverlay) {
+      sourceItems.add(`labor:${laborOverlay.metric_date || "latest"}`);
     }
     [...sourceItems].forEach((source) => {
       const pill = document.createElement("span");
@@ -1002,24 +1028,26 @@
           new THREE.MeshBasicMaterial({ color: hexColor, transparent: true, opacity: 0.07, wireframe: true }),
         ));
 
-        const lDiv = document.createElement("div");
-        lDiv.style.cssText = `font-size:11px;font-weight:600;color:#ccd6f6;padding:2px 8px;
-          background:rgba(8,17,31,0.78);border-radius:4px;white-space:nowrap;
-          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;`;
-        lDiv.textContent = label;
-        const lObj = new CSS2DObject(lDiv);
-        lObj.position.set(0, radius + 0.28, 0);
-        group.add(lObj);
+        if (label) {
+          const lDiv = document.createElement("div");
+          lDiv.style.cssText = `font-size:11px;font-weight:600;color:#ccd6f6;padding:2px 8px;
+            background:rgba(8,17,31,0.78);border-radius:4px;white-space:nowrap;
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;`;
+          lDiv.textContent = label;
+          const lObj = new CSS2DObject(lDiv);
+          lObj.position.set(0, radius + 0.28, 0);
+          group.add(lObj);
 
-        if (sublabel) {
-          const sDiv = document.createElement("div");
-          sDiv.style.cssText = `font-size:9px;font-weight:500;color:#${hexColor.toString(16).padStart(6,"0")};
-            padding:1px 5px;background:rgba(8,17,31,0.65);border-radius:3px;white-space:nowrap;
-            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;margin-top:1px;`;
-          sDiv.textContent = sublabel;
-          const sObj = new CSS2DObject(sDiv);
-          sObj.position.set(0, radius + 0.68, 0);
-          group.add(sObj);
+          if (sublabel) {
+            const sDiv = document.createElement("div");
+            sDiv.style.cssText = `font-size:9px;font-weight:500;color:#${hexColor.toString(16).padStart(6,"0")};
+              padding:1px 5px;background:rgba(8,17,31,0.65);border-radius:3px;white-space:nowrap;
+              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;margin-top:1px;`;
+            sDiv.textContent = sublabel;
+            const sObj = new CSS2DObject(sDiv);
+            sObj.position.set(0, radius + 0.68, 0);
+            group.add(sObj);
+          }
         }
         return group;
       }
@@ -1029,6 +1057,97 @@
           new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...from), new THREE.Vector3(...to)]),
           new THREE.LineBasicMaterial({ color: hexColor, transparent: true, opacity: opacity ?? 0.25 }),
         ));
+      }
+
+      function parseHexColor(value, fallback = 0x8dc8ff) {
+        if (typeof value !== "string") return fallback;
+        const clean = value.trim().replace("#", "");
+        const parsed = Number.parseInt(clean, 16);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      }
+
+      function addCpiKnowledgeGraph(scene) {
+        const kgData = window.__KG_DASHBOARD_DATA__;
+        const cpiGraph = kgData?.cpi_graph;
+        if (!cpiGraph || !Array.isArray(cpiGraph.nodes) || !cpiGraph.nodes.length) return;
+
+        const positions = new Map([["fomc-hub", [0, 1.0, 0]]]);
+        cpiGraph.nodes.forEach((node) => {
+          const x = Number(node?.x ?? 0);
+          const y = Number(node?.y ?? 0);
+          const z = Number(node?.z ?? 0);
+          const size = Math.max(0.03, Number(node?.size ?? 0.08));
+          const color = parseHexColor(node?.color, 0x8dc8ff);
+          const nodeKind = String(node?.kind || "");
+          const showLabel = nodeKind !== "cpi_observation";
+          makeNode(
+            scene,
+            x,
+            y,
+            z,
+            color,
+            size,
+            showLabel ? String(node?.label || "") : "",
+            showLabel ? String(node?.sublabel || "") : "",
+          );
+          positions.set(String(node?.id || ""), [x, y, z]);
+        });
+
+        if (!Array.isArray(cpiGraph.edges)) return;
+        cpiGraph.edges.forEach((edge) => {
+          const from = positions.get(String(edge?.source || ""));
+          const to = positions.get(String(edge?.target || ""));
+          if (!from || !to) return;
+          addEdge(
+            scene,
+            from,
+            to,
+            parseHexColor(edge?.color, 0x8dc8ff),
+            Number(edge?.opacity ?? 0.12),
+          );
+        });
+      }
+
+      function addLaborKnowledgeGraph(scene) {
+        const kgData = window.__LABOR_KG_DASHBOARD_DATA__;
+        const laborGraph = kgData?.labor_graph;
+        if (!laborGraph || !Array.isArray(laborGraph.nodes) || !laborGraph.nodes.length) return;
+
+        const positions = new Map([["fomc-hub", [0, 1.0, 0]]]);
+        laborGraph.nodes.forEach((node) => {
+          const x = Number(node?.x ?? 0);
+          const y = Number(node?.y ?? 0);
+          const z = Number(node?.z ?? 0);
+          const size = Math.max(0.03, Number(node?.size ?? 0.08));
+          const color = parseHexColor(node?.color, 0x7bd389);
+          const nodeKind = String(node?.kind || "");
+          const showLabel = nodeKind !== "labor_observation";
+          makeNode(
+            scene,
+            x,
+            y,
+            z,
+            color,
+            size,
+            showLabel ? String(node?.label || "") : "",
+            showLabel ? String(node?.sublabel || "") : "",
+          );
+          positions.set(String(node?.id || ""), [x, y, z]);
+        });
+
+        if (!Array.isArray(laborGraph.edges)) return;
+        laborGraph.edges.forEach((edge) => {
+          const from = positions.get(String(edge?.source || ""));
+          const to = positions.get(String(edge?.target || ""));
+          if (!from || !to) return;
+          addEdge(
+            scene,
+            from,
+            to,
+            parseHexColor(edge?.color, 0x7bd389),
+            Number(edge?.opacity ?? 0.12),
+          );
+        });
       }
 
       function buildGraph(scene) {
@@ -1089,6 +1208,10 @@
             addEdge(scene, [0, MKT_Y, 0], [mx, MKT_Y, mz], color, 0.22);
           });
         }
+
+        // ── CPI subgraph (dense historical observations) ───────────
+        addCpiKnowledgeGraph(scene);
+        addLaborKnowledgeGraph(scene);
 
         // ── Reference grid ────────────────────────────────────────
         const grid = new THREE.GridHelper(12, 12, 0x203250, 0x121f30);
