@@ -522,8 +522,90 @@ def build_dashboard_labor_payload(
         "metric_metadata": metadata,
         "heat_card": heat_card,
         "latest_values": latest_values,
+        "bias_history": build_labor_bias_history(db_path=db_path),
         "source_url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
     }
+
+
+def build_labor_bias_history(
+    *,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> list[dict[str, object]]:
+    """Replay the labor bias formula across every stored month, oldest first.
+
+    `labor_metrics` only retains the latest reading, so anything that needs the
+    dispersion of the labor signal has no history to measure. JOLTS series lag the
+    household/establishment surveys, so they are looked up on-or-before each date.
+    """
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            SELECT series_id, observation_date, value
+            FROM labor_observations
+            ORDER BY observation_date ASC
+            """
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return []
+    finally:
+        connection.close()
+
+    lookups: dict[str, dict[str, float]] = {}
+    for row in rows:
+        value = _coerce_float(row["value"])
+        if value is None:
+            continue
+        lookups.setdefault(str(row["series_id"]), {})[str(row["observation_date"])] = value
+
+    unemployment = lookups.get("LNS14000000", {})
+    participation = lookups.get("LNS11300000", {})
+    payrolls = lookups.get("CES0000000001", {})
+    wages = lookups.get("CES0500000003", {})
+    unemployed_level = lookups.get("LNS13000000", {})
+    openings = lookups.get("JTS000000000000000JOL", {})
+
+    core = [unemployment, participation, payrolls, wages]
+    if any(not series for series in core):
+        return []
+
+    history: list[dict[str, object]] = []
+    for metric_date in sorted(set(unemployment) & set(participation) & set(payrolls) & set(wages)):
+        payroll_level = payrolls.get(metric_date)
+        deltas = []
+        for offset in (0, 1, 2):
+            current = payrolls.get(_shift_month(metric_date, -offset))
+            previous = payrolls.get(_shift_month(metric_date, -offset - 1))
+            if current is not None and previous is not None:
+                deltas.append(current - previous)
+        payroll_3m_avg = _mean_available(deltas) if deltas else None
+
+        wages_yoy = _pct_change(wages.get(metric_date), wages.get(_shift_month(metric_date, -12)))
+        openings_level = _lookup_on_or_before(openings, metric_date)
+        unemployed_value = _lookup_on_or_before(unemployed_level, metric_date)
+        openings_unemployed_ratio = None
+        if openings_level not in (None, 0.0) and unemployed_value not in (None, 0.0):
+            openings_unemployed_ratio = openings_level / unemployed_value
+
+        if payroll_level is None and wages_yoy is None:
+            continue
+        history.append(
+            {
+                "date": metric_date,
+                "bias": _labor_bias_from_inputs(
+                    payroll_3m_avg=payroll_3m_avg,
+                    unemployment_rate=unemployment.get(metric_date),
+                    wages_yoy=wages_yoy,
+                    openings_unemployed_ratio=openings_unemployed_ratio,
+                    participation_rate=participation.get(metric_date),
+                ),
+                "unemployment_rate": unemployment.get(metric_date),
+                "payroll_3m_avg": None if payroll_3m_avg is None else round(payroll_3m_avg, 4),
+                "wages_yoy": wages_yoy,
+            }
+        )
+    return history
 
 
 def build_labor_knowledge_graph_payload(
@@ -835,23 +917,12 @@ def _compute_latest_labor_metrics(
     if quits_level not in (None, 0.0) and hires_level not in (None, 0.0):
         quits_hires_ratio = quits_level / hires_level
 
-    payroll_component = _clamp(((payroll_3m_avg or 100.0) - 100.0) / 150.0, -1.0, 1.0)
-    unemployment_component = _clamp((4.2 - (unemployment_rate or 4.2)) / 1.4, -1.0, 1.0)
-    wage_component = _clamp(((wages_yoy or 0.03) - 0.03) / 0.02, -1.0, 1.0)
-    openings_component = _clamp(((openings_unemployed_ratio or 1.0) - 1.0) / 0.6, -1.0, 1.0)
-    participation_component = _clamp(((participation_rate or 62.0) - 62.0) / 1.5, -1.0, 1.0)
-
-    labor_bias = round(
-        _clamp(
-            (0.30 * payroll_component)
-            + (0.25 * unemployment_component)
-            + (0.20 * wage_component)
-            + (0.15 * openings_component)
-            + (0.10 * participation_component),
-            -1.0,
-            1.0,
-        ),
-        4,
+    labor_bias = _labor_bias_from_inputs(
+        payroll_3m_avg=payroll_3m_avg,
+        unemployment_rate=unemployment_rate,
+        wages_yoy=wages_yoy,
+        openings_unemployed_ratio=openings_unemployed_ratio,
+        participation_rate=participation_rate,
     )
     labor_heat_score = float(_score_from_bias(labor_bias))
 
@@ -901,6 +972,33 @@ def _compute_latest_labor_metrics(
         }
     }
     return metric_date, metrics, metadata_by_key
+
+
+def _labor_bias_from_inputs(
+    *,
+    payroll_3m_avg: float | None,
+    unemployment_rate: float | None,
+    wages_yoy: float | None,
+    openings_unemployed_ratio: float | None,
+    participation_rate: float | None,
+) -> float:
+    payroll_component = _clamp(((payroll_3m_avg or 100.0) - 100.0) / 150.0, -1.0, 1.0)
+    unemployment_component = _clamp((4.2 - (unemployment_rate or 4.2)) / 1.4, -1.0, 1.0)
+    wage_component = _clamp(((wages_yoy or 0.03) - 0.03) / 0.02, -1.0, 1.0)
+    openings_component = _clamp(((openings_unemployed_ratio or 1.0) - 1.0) / 0.6, -1.0, 1.0)
+    participation_component = _clamp(((participation_rate or 62.0) - 62.0) / 1.5, -1.0, 1.0)
+    return round(
+        _clamp(
+            (0.30 * payroll_component)
+            + (0.25 * unemployment_component)
+            + (0.20 * wage_component)
+            + (0.15 * openings_component)
+            + (0.10 * participation_component),
+            -1.0,
+            1.0,
+        ),
+        4,
+    )
 
 
 def _build_labor_heat_card(*, metric_date: str, metrics: Mapping[str, float]) -> dict[str, object]:

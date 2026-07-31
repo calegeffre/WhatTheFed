@@ -6,8 +6,20 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 
 - **Federal Reserve**: official FOMC statement pages
 - **BLS**: CPI and labor time-series data
-- **Bloomberg**: US Treasury bond market snapshot points
+- **U.S. Treasury**: daily par yield curve rates (1 Mo through 30 Yr)
 - **Kalshi + Polymarket**: market odds for upcoming FOMC outcomes
+
+## Refresh schedule
+
+Windows Task Scheduler jobs under `\WhatTheFed\` keep the local database current:
+
+| Task | Cadence | Script |
+| --- | --- | --- |
+| Market Ingestion | Daily 08:00 | `scripts/run-market-ingestion.ps1` |
+| Macro Ingestion (CPI + labor) | Daily 06:30 | `scripts/run-macro-ingestion.ps1` |
+| Treasury Ingestion | Weekdays 15:00 | `scripts/run-treasury-ingestion.ps1` |
+
+Register them with the matching `scripts/register-*-task.ps1` scripts.
 
 ## Storage and outputs
 

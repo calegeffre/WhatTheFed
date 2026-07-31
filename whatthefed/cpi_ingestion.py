@@ -530,8 +530,74 @@ def build_dashboard_cpi_payload(
         "metric_metadata": metadata,
         "heat_card": heat_card,
         "latest_values": latest_values,
+        "bias_history": build_cpi_bias_history(db_path=db_path),
         "source_url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
     }
+
+
+def build_cpi_bias_history(
+    *,
+    db_path: str | Path = DEFAULT_DB_PATH,
+    headline_id: str = "CUSR0000SA0",
+    core_id: str = "CUSR0000SA0L1E",
+) -> list[dict[str, object]]:
+    """Replay the CPI bias formula across every stored month, oldest first.
+
+    `cpi_metrics` only stores the latest reading, so consumers that need the
+    dispersion of the signal (rather than its level) have nothing to work with.
+    Recomputing from the raw observations keeps the history in bias units.
+    """
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            SELECT series_id, observation_date, value
+            FROM cpi_observations
+            WHERE series_id IN (?, ?)
+            ORDER BY observation_date ASC
+            """,
+            (headline_id, core_id),
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return []
+    finally:
+        connection.close()
+
+    headline: dict[str, float] = {}
+    core: dict[str, float] = {}
+    for row in rows:
+        value = _coerce_float(row["value"])
+        if value is None:
+            continue
+        target = headline if str(row["series_id"]) == headline_id else core
+        target[str(row["observation_date"])] = value
+
+    history: list[dict[str, object]] = []
+    for observation_date in sorted(set(headline).intersection(core)):
+        headline_yoy = _pct_change(
+            headline.get(observation_date), headline.get(_shift_month(observation_date, -12))
+        )
+        core_yoy = _pct_change(core.get(observation_date), core.get(_shift_month(observation_date, -12)))
+        core_3m_ann = _annualized_change(
+            core.get(observation_date), core.get(_shift_month(observation_date, -3)), 3
+        )
+        if core_yoy is None and core_3m_ann is None and headline_yoy is None:
+            continue
+        history.append(
+            {
+                "date": observation_date,
+                "bias": _compute_cpi_bias(
+                    headline_yoy=headline_yoy,
+                    core_yoy=core_yoy,
+                    core_3m_annualized=core_3m_ann,
+                ),
+                "core_yoy": core_yoy,
+                "headline_yoy": headline_yoy,
+                "core_3m_annualized": core_3m_ann,
+            }
+        )
+    return history
 
 
 def build_cpi_knowledge_graph_payload(

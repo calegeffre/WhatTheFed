@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import csv
+import io
 import json
-import re
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -16,12 +17,34 @@ from .rag import Document
 
 
 DEFAULT_DB_PATH = Path("data") / "market_snapshots.db"
-DEFAULT_BLOOMBERG_URL = "https://www.bloomberg.com/markets/rates-bonds/government-bonds/us"
-NEXT_DATA_RE = re.compile(
-    r'<script[^>]*id=["\']__NEXT_DATA__["\'][^>]*>\s*(?P<payload>\{.*?\})\s*</script>',
-    re.IGNORECASE | re.DOTALL,
+PROVIDER = "US Treasury"
+TREASURY_BASE_URL = "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv"
+DEFAULT_TREASURY_URL = (
+    "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
+    "TextView?type=daily_treasury_yield_curve"
 )
-MATURITY_RE = re.compile(r"(?P<count>\d+)\s*(?P<unit>year|yr|y|month|mo)s?\b", re.IGNORECASE)
+
+# Column header -> (symbol, maturity label, months). The feed mixes "1 Mo" and "1.5 Month"
+# spellings, so map explicitly rather than inferring with a regex.
+MATURITY_COLUMNS: dict[str, tuple[str, str, float]] = {
+    "1 Mo": ("UST1M", "1M", 1.0),
+    "1.5 Month": ("UST1_5M", "1.5M", 1.5),
+    "2 Mo": ("UST2M", "2M", 2.0),
+    "3 Mo": ("UST3M", "3M", 3.0),
+    "4 Mo": ("UST4M", "4M", 4.0),
+    "6 Mo": ("UST6M", "6M", 6.0),
+    "1 Yr": ("UST1Y", "1Y", 12.0),
+    "2 Yr": ("UST2Y", "2Y", 24.0),
+    "3 Yr": ("UST3Y", "3Y", 36.0),
+    "5 Yr": ("UST5Y", "5Y", 60.0),
+    "7 Yr": ("UST7Y", "7Y", 84.0),
+    "10 Yr": ("UST10Y", "10Y", 120.0),
+    "20 Yr": ("UST20Y", "20Y", 240.0),
+    "30 Yr": ("UST30Y", "30Y", 360.0),
+}
+MATURITY_MONTHS: dict[str, float] = {
+    maturity: months for _, (_, maturity, months) in MATURITY_COLUMNS.items()
+}
 
 
 @dataclass(frozen=True)
@@ -34,7 +57,7 @@ class TreasuryPoint:
     price: float | None
     change_value: float | None
     source_url: str
-    provider: str = "Bloomberg"
+    provider: str = PROVIDER
 
 
 GetText = Callable[[str], str]
@@ -44,123 +67,82 @@ class TreasuryIngestionError(RuntimeError):
     pass
 
 
-class BloombergTreasuryClient:
+class TreasuryParYieldClient:
+    """Reads the U.S. Treasury daily par yield curve CSV feed.
+
+    Unlike the previous Bloomberg scrape, this endpoint is public, unauthenticated,
+    and returns a full year of daily observations in a single request.
+    """
+
     def __init__(
         self,
         *,
         get_text: GetText | None = None,
-        source_url: str = DEFAULT_BLOOMBERG_URL,
+        base_url: str = TREASURY_BASE_URL,
     ) -> None:
         self.get_text = get_text or _get_text
-        self.source_url = source_url
+        self.base_url = base_url
 
-    def fetch_points(self, *, input_json_path: str | Path | None = None) -> tuple[str, list[TreasuryPoint], str]:
-        if input_json_path is not None:
-            return self._load_points_from_json(Path(input_json_path))
-        html = self.get_text(self.source_url)
-        return self._parse_points_from_html(html, self.source_url)
+    def build_url(self, year: int) -> str:
+        return (
+            f"{self.base_url}/{year}/all"
+            f"?type=daily_treasury_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+        )
 
-    def _load_points_from_json(self, path: Path) -> tuple[str, list[TreasuryPoint], str]:
-        if not path.exists():
-            raise TreasuryIngestionError(f"Treasury input JSON not found: {path}")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(payload, Mapping):
-            raise TreasuryIngestionError("Treasury input JSON must be an object.")
+    def fetch_points(self, *, year: int) -> tuple[str, list[TreasuryPoint], str]:
+        source_url = self.build_url(year)
+        text = self.get_text(source_url)
+        points = self._parse_csv(text, source_url)
+        if not points:
+            raise TreasuryIngestionError(f"Treasury feed returned no usable rows for {year}.")
+        latest_snapshot = max(point.snapshot_at for point in points)
+        return latest_snapshot, points, source_url
 
-        source_url = str(payload.get("source_url") or self.source_url)
-        snapshot_at = str(payload.get("snapshot_at") or payload.get("as_of") or _utcnow().isoformat())
-        raw_points = payload.get("points")
-        if not isinstance(raw_points, list):
-            raise TreasuryIngestionError("Treasury input JSON must include a points array.")
+    def _parse_csv(self, text: str, source_url: str) -> list[TreasuryPoint]:
+        reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+        if not reader.fieldnames or "Date" not in reader.fieldnames:
+            raise TreasuryIngestionError(
+                "Treasury CSV feed did not include a Date column; the endpoint format may have changed."
+            )
+
+        # Collect per-symbol series first so day-over-day changes can be derived.
+        by_symbol: dict[str, list[tuple[str, float]]] = {}
+        meta: dict[str, tuple[str, str]] = {}
+        for row in reader:
+            snapshot_at = _normalize_date(row.get("Date"))
+            if snapshot_at is None:
+                continue
+            for column, (symbol, maturity, _months) in MATURITY_COLUMNS.items():
+                if column not in row:
+                    continue
+                value = _coerce_float(row.get(column))
+                if value is None:
+                    continue
+                by_symbol.setdefault(symbol, []).append((snapshot_at, value))
+                meta[symbol] = (f"{maturity} Treasury", maturity)
 
         points: list[TreasuryPoint] = []
-        for item in raw_points:
-            if not isinstance(item, Mapping):
-                continue
-            symbol = str(item.get("symbol") or item.get("ticker") or "").strip()
-            label = str(item.get("label") or item.get("name") or symbol).strip()
-            maturity = str(item.get("maturity") or _infer_maturity(label) or symbol).strip()
-            if not symbol or not maturity:
-                continue
-            points.append(
-                TreasuryPoint(
-                    snapshot_at=snapshot_at,
-                    symbol=symbol,
-                    label=label or symbol,
-                    maturity=maturity,
-                    yield_pct=_coerce_float(item.get("yield_pct") or item.get("yield")),
-                    price=_coerce_float(item.get("price")),
-                    change_value=_coerce_float(item.get("change_value") or item.get("change")),
-                    source_url=source_url,
+        for symbol, series in by_symbol.items():
+            series.sort(key=lambda item: item[0])
+            label, maturity = meta[symbol]
+            previous: float | None = None
+            for snapshot_at, value in series:
+                points.append(
+                    TreasuryPoint(
+                        snapshot_at=snapshot_at,
+                        symbol=symbol,
+                        label=label,
+                        maturity=maturity,
+                        yield_pct=value,
+                        price=None,
+                        change_value=None if previous is None else round(value - previous, 4),
+                        source_url=source_url,
+                    )
                 )
-            )
+                previous = value
 
-        if not points:
-            raise TreasuryIngestionError("Treasury input JSON did not contain any valid points.")
-        return snapshot_at, points, source_url
-
-    def _parse_points_from_html(self, html: str, source_url: str) -> tuple[str, list[TreasuryPoint], str]:
-        match = NEXT_DATA_RE.search(html)
-        if match is None:
-            raise TreasuryIngestionError(
-                "Could not find Bloomberg page JSON payload. Use --input-json with a Bloomberg snapshot export."
-            )
-        data = json.loads(match.group("payload"))
-        rows = _extract_candidate_rows(data)
-        points: list[TreasuryPoint] = []
-        snapshot_at = str(_find_first_value(data, ("asOf", "as_of", "timestamp", "time")) or _utcnow().isoformat())
-        seen: set[tuple[str, str]] = set()
-        for row in rows:
-            symbol = str(
-                row.get("symbol")
-                or row.get("ticker")
-                or row.get("security")
-                or row.get("id")
-                or row.get("code")
-                or ""
-            ).strip()
-            label = str(row.get("label") or row.get("name") or row.get("securityName") or row.get("description") or symbol)
-            maturity = str(row.get("maturity") or _infer_maturity(label) or _infer_maturity(symbol) or "").strip()
-            yield_pct = _coerce_float(
-                row.get("yield")
-                or row.get("yieldPct")
-                or row.get("yieldPercent")
-                or row.get("yieldToMaturity")
-                or row.get("lastYield")
-            )
-            price = _coerce_float(row.get("price") or row.get("lastPrice") or row.get("pxLast"))
-            change_value = _coerce_float(
-                row.get("change")
-                or row.get("changeValue")
-                or row.get("dailyChange")
-                or row.get("netChange")
-                or row.get("priceChange")
-            )
-            if not symbol or not maturity or yield_pct is None:
-                continue
-            dedupe_key = (symbol, maturity)
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            points.append(
-                TreasuryPoint(
-                    snapshot_at=snapshot_at,
-                    symbol=symbol,
-                    label=label.strip() or symbol,
-                    maturity=maturity,
-                    yield_pct=yield_pct,
-                    price=price,
-                    change_value=change_value,
-                    source_url=source_url,
-                )
-            )
-
-        if not points:
-            raise TreasuryIngestionError(
-                "Bloomberg page parsed but no Treasury rows were found. Use --input-json with a captured snapshot."
-            )
-        points.sort(key=lambda item: _maturity_rank(item.maturity))
-        return snapshot_at, points, source_url
+        points.sort(key=lambda item: (item.snapshot_at, _maturity_rank(item.maturity)))
+        return points
 
 
 class TreasuryStore:
@@ -340,31 +322,40 @@ class TreasuryStore:
 
 
 class TreasuryIngestionService:
-    def __init__(self, *, store: TreasuryStore, client: BloombergTreasuryClient | None = None) -> None:
+    def __init__(self, *, store: TreasuryStore, client: TreasuryParYieldClient | None = None) -> None:
         self.store = store
-        self.client = client or BloombergTreasuryClient()
+        self.client = client or TreasuryParYieldClient()
 
-    def ingest(self, *, input_json_path: str | Path | None = None) -> dict[str, object]:
+    def ingest(self, *, years: Iterable[int] | None = None) -> dict[str, object]:
         run_id = str(uuid.uuid4())
         started_at = _utcnow().isoformat()
         self.store.record_run(run_id=run_id, started_at=started_at, status="started")
+        target_years = sorted({int(year) for year in (years or [_utcnow().year])})
         try:
-            snapshot_at, points, source_url = self.client.fetch_points(input_json_path=input_json_path)
-            observation_count = self.store.write_observations(points)
+            observation_count = 0
+            snapshots: list[str] = []
+            source_url = ""
+            for year in target_years:
+                snapshot_at, points, url = self.client.fetch_points(year=year)
+                observation_count += self.store.write_observations(points)
+                snapshots.append(snapshot_at)
+                source_url = url
+            latest_snapshot = max(snapshots) if snapshots else None
             self.store.record_run(
                 run_id=run_id,
                 started_at=started_at,
                 completed_at=_utcnow().isoformat(),
                 status="completed",
                 observation_count=observation_count,
-                snapshot_at=snapshot_at,
+                snapshot_at=latest_snapshot,
                 source_url=source_url,
             )
             return {
                 "run_id": run_id,
                 "observation_count": observation_count,
-                "snapshot_at": snapshot_at,
+                "snapshot_at": latest_snapshot,
                 "source_url": source_url,
+                "years": target_years,
             }
         except Exception as exc:
             self.store.record_run(
@@ -450,14 +441,80 @@ def build_treasury_dashboard_payload(
         for row in rows
     ]
     points.sort(key=lambda item: _maturity_rank(str(item["maturity"])))
-    source_url = str(points[0]["source_url"]) if points else DEFAULT_BLOOMBERG_URL
+    source_url = str(points[0]["source_url"]) if points else DEFAULT_TREASURY_URL
+    slope_history = build_treasury_slope_history(db_path=db_path)
     return {
         "generated_at": _utcnow().isoformat(),
         "latest_snapshot_at": latest_snapshot_at,
         "source_url": source_url,
-        "provider": "Bloomberg",
+        "provider": PROVIDER,
         "points": points,
+        "slope_history": slope_history,
     }
+
+
+def treasury_slope_bias(slope_pct: float) -> float:
+    """Map the 10Y-2Y spread (in percentage points) onto the shared [-1, +1] bias scale.
+
+    A flat/inverted curve means the market expects policy to stay tight or tighten
+    further (positive bias); a steep curve implies easing ahead (negative bias).
+    A 1.0pp spread is treated as the neutral anchor and 1.0pp of deviation saturates.
+    """
+    return round(max(-1.0, min(1.0, (1.0 - slope_pct) / 1.0)), 4)
+
+
+def build_treasury_slope_history(
+    *,
+    db_path: str | Path = DEFAULT_DB_PATH,
+    long_symbol: str = "UST10Y",
+    short_symbol: str = "UST2Y",
+    limit: int = 400,
+) -> list[dict[str, object]]:
+    """Daily 10Y-2Y spread converted to bias units, oldest first.
+
+    Experiment 7 needs a volatility estimate in the same units as the model's bias
+    inputs; deriving it from raw yield levels understates real policy-signal moves.
+    """
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            SELECT snapshot_at, symbol, yield_pct
+            FROM treasury_observations
+            WHERE symbol IN (?, ?) AND yield_pct IS NOT NULL
+            ORDER BY snapshot_at ASC
+            """,
+            (long_symbol, short_symbol),
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return []
+    finally:
+        connection.close()
+
+    by_date: dict[str, dict[str, float]] = {}
+    for row in rows:
+        value = _coerce_float(row["yield_pct"])
+        if value is None:
+            continue
+        by_date.setdefault(str(row["snapshot_at"]), {})[str(row["symbol"])] = value
+
+    history: list[dict[str, object]] = []
+    for snapshot_at in sorted(by_date):
+        pair = by_date[snapshot_at]
+        if long_symbol not in pair or short_symbol not in pair:
+            continue
+        slope = round(pair[long_symbol] - pair[short_symbol], 4)
+        history.append(
+            {
+                "date": snapshot_at,
+                "slope": slope,
+                "long_yield": pair[long_symbol],
+                "short_yield": pair[short_symbol],
+                "bias": treasury_slope_bias(slope),
+            }
+        )
+    return history[-max(1, limit) :]
 
 
 def build_treasury_knowledge_graph_payload(
@@ -582,7 +639,7 @@ def build_treasury_knowledge_graph_payload(
             "id": "treasury-hub",
             "kind": "treasury_hub",
             "label": "US Treasuries",
-            "sublabel": "Bloomberg",
+            "sublabel": PROVIDER,
             "x": 5.1,
             "y": 2.9,
             "z": 0.0,
@@ -613,14 +670,26 @@ def build_treasury_knowledge_graph_payload(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Ingest Bloomberg US Treasury bond points into SQLite.")
+    parser = argparse.ArgumentParser(
+        description="Ingest the U.S. Treasury daily par yield curve into SQLite."
+    )
     parser.add_argument("--db-path", default=str(DEFAULT_DB_PATH), help="SQLite database path.")
     parser.add_argument(
-        "--input-json",
-        help=(
-            "Optional path to a local Bloomberg snapshot JSON file "
-            "(format: {snapshot_at, source_url, points:[{symbol,label,maturity,yield_pct,price,change_value}]})"
-        ),
+        "--year",
+        type=int,
+        action="append",
+        dest="years",
+        help="Calendar year to ingest. Repeat to backfill multiple years (default: current year).",
+    )
+    parser.add_argument(
+        "--start-year",
+        type=int,
+        help="Optional start year for a contiguous backfill range (used with --end-year).",
+    )
+    parser.add_argument(
+        "--end-year",
+        type=int,
+        help="Optional end year for a contiguous backfill range (defaults to the current year).",
     )
     parser.add_argument(
         "--dashboard-js",
@@ -640,8 +709,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    years: set[int] = set(args.years or [])
+    if args.start_year is not None:
+        end_year = args.end_year or _utcnow().year
+        if end_year < args.start_year:
+            parser.error("--end-year must be greater than or equal to --start-year")
+        years.update(range(args.start_year, end_year + 1))
+    if not years:
+        years = {_utcnow().year}
+
     service = TreasuryIngestionService(store=TreasuryStore(args.db_path))
-    result = service.ingest(input_json_path=args.input_json)
+    result = service.ingest(years=sorted(years))
     if args.dashboard_js:
         export_dashboard_treasury_js(
             db_path=args.db_path,
@@ -651,61 +729,36 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     print(
-        f"Ingested {result['observation_count']} Treasury points "
-        f"(snapshot_at={result['snapshot_at']}, source={result['source_url']})."
+        f"Ingested {result['observation_count']} Treasury points across {result['years']} "
+        f"(latest snapshot_at={result['snapshot_at']}, source={result['source_url']})."
     )
     return 0
 
 
-def _extract_candidate_rows(value: object) -> list[Mapping[str, object]]:
-    rows: list[Mapping[str, object]] = []
-    if isinstance(value, Mapping):
-        if any(key in value for key in ("symbol", "ticker", "securityName", "maturity")):
-            rows.append(value)
-        for child in value.values():
-            rows.extend(_extract_candidate_rows(child))
-    elif isinstance(value, list):
-        for item in value:
-            rows.extend(_extract_candidate_rows(item))
-    return rows
-
-
-def _find_first_value(value: object, keys: tuple[str, ...]) -> object | None:
-    if isinstance(value, Mapping):
-        for key in keys:
-            if key in value:
-                return value[key]
-        for child in value.values():
-            found = _find_first_value(child, keys)
-            if found is not None:
-                return found
-    elif isinstance(value, list):
-        for item in value:
-            found = _find_first_value(item, keys)
-            if found is not None:
-                return found
+def _normalize_date(value: object) -> str | None:
+    """Treasury publishes MM/DD/YYYY; normalise to ISO so string ordering is chronological."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%m/%d/%y"):
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            continue
     return None
 
 
-def _infer_maturity(text: str) -> str | None:
-    match = MATURITY_RE.search(text)
-    if match is None:
-        return None
-    count = int(match.group("count"))
-    unit = match.group("unit").lower()
-    if unit.startswith("m"):
-        return f"{count}M"
-    return f"{count}Y"
-
-
 def _maturity_rank(maturity: str) -> float:
-    parsed = _infer_maturity(maturity)
-    if parsed is None:
+    months = MATURITY_MONTHS.get(maturity)
+    if months is not None:
+        return months
+    text = maturity.strip().upper()
+    suffix = text[-1:]
+    try:
+        count = float(text[:-1])
+    except ValueError:
         return 9999.0
-    count = int(parsed[:-1])
-    if parsed.endswith("M"):
-        return float(count)
-    return float(count * 12)
+    return count if suffix == "M" else count * 12.0
 
 
 def _coerce_float(value: object) -> float | None:
@@ -721,17 +774,13 @@ def _get_text(url: str) -> str:
     request = Request(
         url,
         headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "User-Agent": "WhatTheFed/1.0 (+https://github.com/calegeffre/WhatTheFed)",
+            "Accept": "text/csv,text/plain,*/*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.bloomberg.com/",
         },
         method="GET",
     )
-    with urlopen(request, timeout=30) as response:
+    with urlopen(request, timeout=60) as response:
         return response.read().decode("utf-8", errors="replace")
 
 
