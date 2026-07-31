@@ -1,0 +1,30 @@
+{
+  "snapshot_at": "2026-07-31T13:30:00Z",
+  "source_url": "https://www.bloomberg.com/markets/rates-bonds/government-bonds/us",
+  "points": [
+    {
+      "symbol": "USGG2YR:IND",
+      "label": "US Treasury 2Y",
+      "maturity": "2Y",
+      "yield_pct": 3.81,
+      "price": 99.17,
+      "change_value": -0.03
+    },
+    {
+      "symbol": "USGG5YR:IND",
+      "label": "US Treasury 5Y",
+      "maturity": "5Y",
+      "yield_pct": 3.74,
+      "price": 98.56,
+      "change_value": -0.04
+    },
+    {
+      "symbol": "USGG10YR:IND",
+      "label": "US Treasury 10Y",
+      "maturity": "10Y",
+      "yield_pct": 3.89,
+      "price": 96.84,
+      "change_value": -0.06
+    }
+  ]
+}

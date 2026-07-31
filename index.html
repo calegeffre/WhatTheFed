@@ -414,6 +414,44 @@
       border: 1px solid rgba(141, 200, 255, 0.1);
       border-radius: 12px;
     }
+    .raw-data-wrap {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(141, 200, 255, 0.1);
+      border-radius: 12px;
+      overflow: auto;
+    }
+    .raw-data-headline {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .raw-data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .raw-data-table th,
+    .raw-data-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(141, 200, 255, 0.12);
+      text-align: left;
+      white-space: nowrap;
+    }
+    .raw-data-table th {
+      color: #8dc8ff;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      background: rgba(141, 200, 255, 0.06);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .raw-data-empty {
+      margin: 4px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
   </style>
   <script type="importmap">
   {
@@ -450,12 +488,16 @@
       <div class="viz-tabs">
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
         <button class="viz-tab" data-viz="knowledge-graph">Signal Knowledge Graph</button>
+        <button class="viz-tab" data-viz="raw-data">Raw Data</button>
       </div>
       <div id="viz-panel-rate-timeline" class="viz-panel viz-panel-active">
         <svg id="rate-chart" class="viz-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div id="viz-panel-knowledge-graph" class="viz-panel">
         <div id="kg-canvas" class="viz-chart" style="height:460px;position:relative;overflow:hidden;"></div>
+      </div>
+      <div id="viz-panel-raw-data" class="viz-panel">
+        <div id="raw-data-wrap" class="raw-data-wrap"></div>
       </div>
     </section>
 
@@ -475,6 +517,7 @@
     window.__KG_DASHBOARD_DATA__ = window.__KG_DASHBOARD_DATA__ || null;
     window.__LABOR_DASHBOARD_DATA__ = window.__LABOR_DASHBOARD_DATA__ || null;
     window.__LABOR_KG_DASHBOARD_DATA__ = window.__LABOR_KG_DASHBOARD_DATA__ || null;
+    window.__TREASURY_DASHBOARD_DATA__ = window.__TREASURY_DASHBOARD_DATA__ || null;
   </script>
   <script src="data/fomc_dashboard_data.js"></script>
   <script src="data/fomc_history_data.js"></script>
@@ -483,6 +526,7 @@
   <script src="data/kg_dashboard_data.js"></script>
   <script src="data/labor_dashboard_data.js"></script>
   <script src="data/labor_kg_dashboard_data.js"></script>
+  <script src="data/treasury_dashboard_data.js"></script>
   <script>
     const dashboardData = {
       next_meeting_prediction: {
@@ -576,6 +620,9 @@
     const marketOverlay = window.__MARKET_DASHBOARD_DATA__;
     const cpiOverlay = window.__CPI_DASHBOARD_DATA__;
     const laborOverlay = window.__LABOR_DASHBOARD_DATA__;
+    const cpiKgOverlay = window.__KG_DASHBOARD_DATA__;
+    const laborKgOverlay = window.__LABOR_KG_DASHBOARD_DATA__;
+    const treasuryOverlay = window.__TREASURY_DASHBOARD_DATA__;
     const normalizeTriplet = (values) => {
       const parsed = {
         raise: Number(values?.raise || 0),
@@ -700,6 +747,9 @@
     }
     if (laborOverlay) {
       sourceItems.add(`labor:${laborOverlay.metric_date || "latest"}`);
+    }
+    if (treasuryOverlay) {
+      sourceItems.add(`treasury:${treasuryOverlay.latest_snapshot_at || "latest"}`);
     }
     [...sourceItems].forEach((source) => {
       const pill = document.createElement("span");
@@ -975,6 +1025,269 @@
       if (typeof window._kgInit === "function") window._kgInit();
     }
 
+    function fmtNumber(value, digits = 3) {
+      if (typeof value !== "number" || Number.isNaN(value)) return "n/a";
+      return value.toFixed(digits);
+    }
+
+    function escHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function drawRawDataTable() {
+      const container = document.getElementById("raw-data-wrap");
+      if (!container) return;
+
+      const rows = [];
+      const pushRow = ({ dataset, asOf, metric, key, value, details, sourceUrl }) => {
+        rows.push({
+          dataset: dataset || "Unknown",
+          asOf: asOf || "N/A",
+          metric: metric || "N/A",
+          key: key || "N/A",
+          value: value ?? "n/a",
+          details: details || "",
+          sourceUrl: sourceUrl || "",
+        });
+      };
+      const pct = (value, digits = 2) => (typeof value === "number" ? `${fmtNumber(value * 100, digits)}%` : "n/a");
+      const num = (value, digits = 3) => (typeof value === "number" ? fmtNumber(value, digits) : "n/a");
+      const addGraphObservationRows = ({
+        graph,
+        dataset,
+        seriesKind,
+        observationKind,
+        seriesPrefix,
+        observationPrefix,
+        sourceUrl,
+      }) => {
+        if (!graph || !Array.isArray(graph.nodes)) return;
+        const seriesByKey = new Map();
+        graph.nodes.forEach((node) => {
+          if (node?.kind !== seriesKind) return;
+          const id = String(node?.id || "");
+          const key = id.startsWith(seriesPrefix) ? id.slice(seriesPrefix.length) : id.split(":")[1] || id;
+          seriesByKey.set(key, {
+            label: String(node?.label || key),
+            id: String(node?.sublabel || key),
+          });
+        });
+
+        graph.nodes.forEach((node) => {
+          if (node?.kind !== observationKind) return;
+          const id = String(node?.id || "");
+          const obsId = id.startsWith(observationPrefix) ? id.slice(observationPrefix.length) : id;
+          const lastSep = obsId.lastIndexOf(":");
+          const key = lastSep > 0 ? obsId.slice(0, lastSep) : obsId;
+          const series = seriesByKey.get(key) || { label: key, id: key };
+          pushRow({
+            dataset,
+            asOf: String(node?.label || "N/A"),
+            metric: series.label,
+            key: series.id,
+            value: String(node?.sublabel || "n/a"),
+            details: "observation",
+            sourceUrl,
+          });
+        });
+      };
+
+      if (fomcOverlay) {
+        pushRow({
+          dataset: "FOMC",
+          asOf: fomcOverlay.meeting_date,
+          metric: "Decision",
+          key: "decision",
+          value: String(fomcOverlay.decision || "").toUpperCase(),
+          details: `Vote ${fomcOverlay.vote_tally || "N/A"}`,
+          sourceUrl: fomcOverlay.source_url,
+        });
+        (fomcOverlay.signals || []).forEach((signal) =>
+          pushRow({
+            dataset: "FOMC Signal",
+            asOf: fomcOverlay.meeting_date,
+            metric: signal?.label,
+            key: "score",
+            value: signal?.display || (typeof signal?.score === "number" ? `${signal.score}/5` : "n/a"),
+            details: `tone ${signal?.tone || "n/a"} · mentions ${signal?.mentions ?? "n/a"}`,
+            sourceUrl: fomcOverlay.source_url,
+          })
+        );
+      }
+
+      if (cpiOverlay) {
+        addGraphObservationRows({
+          graph: cpiKgOverlay?.cpi_graph,
+          dataset: "CPI",
+          seriesKind: "cpi_series",
+          observationKind: "cpi_observation",
+          seriesPrefix: "cpi-series:",
+          observationPrefix: "cpi-obs:",
+          sourceUrl: cpiOverlay.source_url,
+        });
+        Object.entries(cpiOverlay.metrics || {}).forEach(([metricKey, metricValue]) =>
+          pushRow({
+            dataset: "CPI Metric",
+            asOf: cpiOverlay.metric_date,
+            metric: metricKey,
+            key: "derived",
+            value:
+              metricKey.includes("yoy") || metricKey.includes("mom") || metricKey.includes("annualized")
+                ? pct(metricValue, 2)
+                : num(metricValue, 4),
+            details: "computed",
+            sourceUrl: cpiOverlay.source_url,
+          })
+        );
+      }
+
+      if (laborOverlay) {
+        addGraphObservationRows({
+          graph: laborKgOverlay?.labor_graph,
+          dataset: "Labor",
+          seriesKind: "labor_series",
+          observationKind: "labor_observation",
+          seriesPrefix: "labor-series:",
+          observationPrefix: "labor-obs:",
+          sourceUrl: laborOverlay.source_url,
+        });
+        Object.entries(laborOverlay.metrics || {}).forEach(([metricKey, metricValue]) =>
+          pushRow({
+            dataset: "Labor Metric",
+            asOf: laborOverlay.metric_date,
+            metric: metricKey,
+            key: "derived",
+            value:
+              metricKey.includes("yoy") || metricKey.includes("mom") || metricKey.includes("annualized")
+                ? pct(metricValue, 2)
+                : num(metricValue, 4),
+            details: "computed",
+            sourceUrl: laborOverlay.source_url,
+          })
+        );
+      }
+
+      if (marketOverlay) {
+        Object.entries(marketOverlay.blended_probabilities || {}).forEach(([outcome, probability]) =>
+          pushRow({
+            dataset: "Market Blend",
+            asOf: marketOverlay.target_meeting,
+            metric: `Outcome ${String(outcome).toUpperCase()}`,
+            key: "probability",
+            value: pct(probability, 1),
+            details: `target ${marketOverlay.target_meeting || "n/a"}`,
+          })
+        );
+        Object.entries(marketOverlay.providers || {}).forEach(([provider, payload]) => {
+          Object.entries(payload?.probabilities || {}).forEach(([outcome, probability]) =>
+            pushRow({
+              dataset: `Market ${provider}`,
+              asOf: payload?.latest_published_at || marketOverlay.target_meeting,
+              metric: `Outcome ${String(outcome).toUpperCase()}`,
+              key: "probability",
+              value: pct(probability, 1),
+              details: `target ${marketOverlay.target_meeting || "n/a"}`,
+            })
+          );
+          pushRow({
+            dataset: `Market ${provider}`,
+            asOf: payload?.latest_published_at || marketOverlay.target_meeting,
+            metric: "Volume",
+            key: "volume",
+            value: num(payload?.volume, 2),
+            details: `markets ${payload?.market_count ?? "n/a"}`,
+          });
+          pushRow({
+            dataset: `Market ${provider}`,
+            asOf: payload?.latest_published_at || marketOverlay.target_meeting,
+            metric: "Liquidity",
+            key: "liquidity",
+            value: num(payload?.liquidity, 2),
+            details: `markets ${payload?.market_count ?? "n/a"}`,
+          });
+        });
+      }
+
+      if (treasuryOverlay) {
+        addGraphObservationRows({
+          graph: treasuryOverlay?.treasury_graph,
+          dataset: "Treasury",
+          seriesKind: "treasury_series",
+          observationKind: "treasury_observation",
+          seriesPrefix: "treasury-series:",
+          observationPrefix: "treasury-obs:",
+          sourceUrl: treasuryOverlay.source_url,
+        });
+        (treasuryOverlay.points || []).forEach((point) => {
+          const yieldValue = typeof point?.yield_pct === "number" ? `${fmtNumber(point.yield_pct, 3)}%` : "n/a";
+          const priceValue = num(point?.price, 3);
+          const changeValue =
+            typeof point?.change_value === "number" ? `${point.change_value >= 0 ? "+" : ""}${fmtNumber(point.change_value, 3)}` : "n/a";
+          pushRow({
+            dataset: "Treasury Snapshot",
+            asOf: point?.snapshot_at || treasuryOverlay.latest_snapshot_at,
+            metric: point?.label,
+            key: point?.symbol,
+            value: yieldValue,
+            details: `${point?.maturity || "n/a"} · px ${priceValue} · chg ${changeValue}`,
+            sourceUrl: point?.source_url || treasuryOverlay.source_url,
+          });
+        });
+      }
+
+      if (!rows.length) {
+        container.innerHTML = `
+          <p class="raw-data-headline">Raw Data</p>
+          <p class="raw-data-empty">No source payloads are loaded yet.</p>
+        `;
+        return;
+      }
+
+      const datasets = [...new Set(rows.map((row) => row.dataset))];
+      const bodyRows = rows
+        .map(
+          (row) => `
+            <tr>
+              <td>${escHtml(row.dataset)}</td>
+              <td>${escHtml(row.asOf)}</td>
+              <td>${escHtml(row.metric)}</td>
+              <td>${escHtml(row.key)}</td>
+              <td>${escHtml(String(row.value))}</td>
+              <td>${escHtml(row.details)}</td>
+              <td>${
+                row.sourceUrl
+                  ? `<a href="${escHtml(row.sourceUrl)}" target="_blank" rel="noreferrer noopener">link</a>`
+                  : "n/a"
+              }</td>
+            </tr>
+          `
+        )
+        .join("");
+
+      container.innerHTML = `
+        <p class="raw-data-headline">${rows.length} rows · ${datasets.length} datasets (${escHtml(datasets.join(", "))})</p>
+        <table class="raw-data-table">
+          <thead>
+            <tr>
+              <th>Dataset</th>
+              <th>As Of</th>
+              <th>Metric</th>
+              <th>ID</th>
+              <th>Value</th>
+              <th>Details</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      `;
+    }
+
     function initVizTabs() {
       const tabBtns = document.querySelectorAll(".viz-tab");
       tabBtns.forEach((btn) => {
@@ -985,9 +1298,11 @@
           document.getElementById("viz-panel-" + btn.dataset.viz).classList.add("viz-panel-active");
           if (btn.dataset.viz === "rate-timeline") drawRateTimeline();
           else if (btn.dataset.viz === "knowledge-graph") drawKnowledgeGraph();
+          else if (btn.dataset.viz === "raw-data") drawRawDataTable();
         });
       });
       drawRateTimeline();
+      drawRawDataTable();
     }
 
     initVizTabs();
@@ -1150,6 +1465,48 @@
         });
       }
 
+      function addTreasuryKnowledgeGraph(scene) {
+        const treasuryData = window.__TREASURY_DASHBOARD_DATA__;
+        const treasuryGraph = treasuryData?.treasury_graph;
+        if (!treasuryGraph || !Array.isArray(treasuryGraph.nodes) || !treasuryGraph.nodes.length) return;
+
+        const positions = new Map([["fomc-hub", [0, 1.0, 0]]]);
+        treasuryGraph.nodes.forEach((node) => {
+          const x = Number(node?.x ?? 0);
+          const y = Number(node?.y ?? 0);
+          const z = Number(node?.z ?? 0);
+          const size = Math.max(0.03, Number(node?.size ?? 0.08));
+          const color = parseHexColor(node?.color, 0xf2cc60);
+          const nodeKind = String(node?.kind || "");
+          const showLabel = nodeKind !== "treasury_observation";
+          makeNode(
+            scene,
+            x,
+            y,
+            z,
+            color,
+            size,
+            showLabel ? String(node?.label || "") : "",
+            showLabel ? String(node?.sublabel || "") : "",
+          );
+          positions.set(String(node?.id || ""), [x, y, z]);
+        });
+
+        if (!Array.isArray(treasuryGraph.edges)) return;
+        treasuryGraph.edges.forEach((edge) => {
+          const from = positions.get(String(edge?.source || ""));
+          const to = positions.get(String(edge?.target || ""));
+          if (!from || !to) return;
+          addEdge(
+            scene,
+            from,
+            to,
+            parseHexColor(edge?.color, 0xf2cc60),
+            Number(edge?.opacity ?? 0.14),
+          );
+        });
+      }
+
       function buildGraph(scene) {
         const fomcData = window.__FOMC_DASHBOARD_DATA__;
         const mktData  = window.__MARKET_DASHBOARD_DATA__;
@@ -1212,6 +1569,7 @@
         // ── CPI subgraph (dense historical observations) ───────────
         addCpiKnowledgeGraph(scene);
         addLaborKnowledgeGraph(scene);
+        addTreasuryKnowledgeGraph(scene);
 
         // ── Reference grid ────────────────────────────────────────
         const grid = new THREE.GridHelper(12, 12, 0x203250, 0x121f30);

@@ -25,7 +25,9 @@ TOPIC_KEYWORDS = {
 }
 MEETING_KINDS = frozenset({"meeting_note", "fomc_statement", "fomc_minutes"})
 MARKET_KINDS = frozenset({"kalshi_market", "polymarket_market", "market_signal"})
-CPI_KINDS = frozenset({"cpi_observation", "cpi_metric", "labor_observation", "labor_metric"})
+CPI_KINDS = frozenset(
+    {"cpi_observation", "cpi_metric", "labor_observation", "labor_metric", "treasury_observation", "treasury_metric"}
+)
 EXCLUDED_NAME_MATCHES = {"Vice Chair"}
 
 
@@ -265,7 +267,12 @@ class KnowledgeGraphBuilder:
         series_id = str(metadata.get("series_id") or document.source)
         series_label = str(metadata.get("series_label") or series_id)
         observation_date = str(metadata.get("observation_date") or document.published_at or "unknown")
-        metric_namespace = "labor" if document.kind.startswith("labor_") else "cpi"
+        if document.kind.startswith("labor_"):
+            metric_namespace = "labor"
+        elif document.kind.startswith("treasury_"):
+            metric_namespace = "treasury"
+        else:
+            metric_namespace = "cpi"
         category = str(metadata.get("category") or metric_namespace)
 
         series_node_id = f"{metric_namespace}_series:{series_id}"

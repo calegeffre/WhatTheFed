@@ -6,6 +6,7 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 
 - **Federal Reserve**: official FOMC statement pages
 - **BLS**: CPI and labor time-series data
+- **Bloomberg**: US Treasury bond market snapshot points
 - **Kalshi + Polymarket**: market odds for upcoming FOMC outcomes
 
 ## Storage and outputs
