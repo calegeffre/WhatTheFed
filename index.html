@@ -579,6 +579,8 @@
     window.__TREASURY_DASHBOARD_DATA__ = window.__TREASURY_DASHBOARD_DATA__ || null;
     window.__POLICY_RATE_DASHBOARD_DATA__ = window.__POLICY_RATE_DASHBOARD_DATA__ || null;
     window.__BREAKEVEN_DASHBOARD_DATA__ = window.__BREAKEVEN_DASHBOARD_DATA__ || null;
+    window.__PPI_DASHBOARD_DATA__ = window.__PPI_DASHBOARD_DATA__ || null;
+    window.__FISCAL_DASHBOARD_DATA__ = window.__FISCAL_DASHBOARD_DATA__ || null;
     window.__KG_EXPERIMENT__ = window.__KG_EXPERIMENT__ || "experiment-1";
     window.__KG_MEETING_OFFSET__ = window.__KG_MEETING_OFFSET__ || 0;
   </script>
@@ -592,6 +594,8 @@
   <script src="data/treasury_dashboard_data.js"></script>
   <script src="data/policy_rate_dashboard_data.js"></script>
   <script src="data/breakeven_dashboard_data.js"></script>
+  <script src="data/ppi_dashboard_data.js"></script>
+  <script src="data/fiscal_dashboard_data.js"></script>
   <script>
     const dashboardData = {
       next_meeting_prediction: {
@@ -690,6 +694,8 @@
     const treasuryOverlay = window.__TREASURY_DASHBOARD_DATA__;
     const policyRateOverlay = window.__POLICY_RATE_DASHBOARD_DATA__;
     const breakevenOverlay = window.__BREAKEVEN_DASHBOARD_DATA__;
+    const ppiOverlay = window.__PPI_DASHBOARD_DATA__;
+    const fiscalOverlay = window.__FISCAL_DASHBOARD_DATA__;
     const normalizeTriplet = (values) => {
       const parsed = {
         raise: Number(values?.raise || 0),
@@ -781,6 +787,16 @@
       return [breakevenOverlay.heat_card];
     })();
 
+    const ppiHeatCards = (() => {
+      if (!ppiOverlay || !ppiOverlay.heat_card) return [];
+      return [ppiOverlay.heat_card];
+    })();
+
+    const fiscalHeatCards = (() => {
+      if (!fiscalOverlay || !fiscalOverlay.heat_card) return [];
+      return [fiscalOverlay.heat_card];
+    })();
+
     const fomcHeatCards = (() => {
       if (!fomcOverlay || !Array.isArray(fomcOverlay.signals) || !fomcOverlay.signals.length) {
         return dashboardData.dashboard.next_meeting_heat_map;
@@ -802,9 +818,11 @@
     const combinedHeatMap = [
       ...fomcHeatCards,
       ...cpiHeatCards,
+      ...ppiHeatCards,
       ...laborHeatCards,
       ...breakevenHeatCards,
       ...policyRateHeatCards,
+      ...fiscalHeatCards,
       ...marketHeatCards,
     ];
 
@@ -840,6 +858,12 @@
     }
     if (policyRateOverlay) {
       sourceItems.add(`nyfed:${policyRateOverlay.metric_date || "latest"}`);
+    }
+    if (ppiOverlay) {
+      sourceItems.add(`ppi:${ppiOverlay.metric_date || "latest"}`);
+    }
+    if (fiscalOverlay) {
+      sourceItems.add(`fiscal:${fiscalOverlay.metric_date || "latest"}`);
     }
     [...sourceItems].forEach((source) => {
       const pill = document.createElement("span");
@@ -1390,6 +1414,58 @@
         );
       }
 
+      if (ppiOverlay) {
+        (ppiOverlay.latest_values || []).forEach((entry) =>
+          pushRow({
+            dataset: "PPI",
+            asOf: ppiOverlay.metric_date,
+            metric: entry?.label,
+            key: entry?.series_id,
+            value: num(entry?.value, 3),
+            details: `${entry?.category || "producer prices"}${entry?.preliminary ? " · preliminary" : ""}`,
+            sourceUrl: ppiOverlay.source_url,
+          })
+        );
+        Object.entries(ppiOverlay.metrics || {}).forEach(([metricKey, metricValue]) =>
+          pushRow({
+            dataset: "PPI Metric",
+            asOf: ppiOverlay.metric_date,
+            metric: metricKey,
+            key: "derived",
+            value: metricKey.includes("yoy") || metricKey.includes("annualized")
+              ? `${num(metricValue, 2)}%`
+              : num(metricValue, 4),
+            details: "computed",
+            sourceUrl: ppiOverlay.source_url,
+          })
+        );
+      }
+
+      if (fiscalOverlay) {
+        (fiscalOverlay.latest_values || []).forEach((entry) =>
+          pushRow({
+            dataset: "Fiscal",
+            asOf: fiscalOverlay.metric_date,
+            metric: entry?.label,
+            key: entry?.series_id,
+            value: typeof entry?.value_billions === "number" ? `$${num(entry.value_billions, 1)}B` : "n/a",
+            details: `MTS report ${fiscalOverlay.report_date || "n/a"}`,
+            sourceUrl: fiscalOverlay.source_url,
+          })
+        );
+        Object.entries(fiscalOverlay.metrics || {}).forEach(([metricKey, metricValue]) =>
+          pushRow({
+            dataset: "Fiscal Metric",
+            asOf: fiscalOverlay.metric_date,
+            metric: metricKey,
+            key: "derived",
+            value: metricKey.includes("billions") ? `$${num(metricValue, 1)}B` : num(metricValue, 4),
+            details: "computed",
+            sourceUrl: fiscalOverlay.source_url,
+          })
+        );
+      }
+
       if (!rows.length) {
         container.innerHTML = `
           <p class="raw-data-headline">Raw Data</p>
@@ -1815,11 +1891,15 @@
         const treasuryData = window.__TREASURY_DASHBOARD_DATA__;
         const breakevenData = window.__BREAKEVEN_DASHBOARD_DATA__;
         const policyRateData = window.__POLICY_RATE_DASHBOARD_DATA__;
+        const ppiData = window.__PPI_DASHBOARD_DATA__;
+        const fiscalData = window.__FISCAL_DASHBOARD_DATA__;
 
         const cpiBias = clamp(Number(cpiData?.metrics?.cpi_bias || 0), -1, 1);
         const laborBias = clamp(Number(laborData?.metrics?.labor_bias || 0), -1, 1);
         const breakevenBias = clamp(Number(breakevenData?.metrics?.breakeven_bias || 0), -1, 1);
         const policyRateBias = clamp(Number(policyRateData?.metrics?.policy_rate_bias || 0), -1, 1);
+        const ppiBias = clamp(Number(ppiData?.metrics?.ppi_bias || 0), -1, 1);
+        const fiscalBias = clamp(Number(fiscalData?.metrics?.fiscal_bias || 0), -1, 1);
         const y2 = extractSeriesValue(treasuryData?.points, (value) => value.includes("2Y"));
         const y10 = extractSeriesValue(treasuryData?.points, (value) => value.includes("10Y"));
         const slope = y10 !== null && y2 !== null ? y10 - y2 : null;
@@ -1830,6 +1910,8 @@
           breakeven: breakevenBias,
           treasury: treasurySlopeBias,
           policyRate: policyRateBias,
+          ppi: ppiBias,
+          fiscal: fiscalBias,
         });
 
         const history = historicalMeetings();
@@ -1916,7 +1998,10 @@
         }
 
         const focusIndex = clamp(chain.findIndex((entry) => entry.date === targetDate), 0, chain.length - 1);
-        return { chain, focusIndex, macroBias, cpiBias, laborBias, slope, treasurySlopeBias, breakevenBias, policyRateBias };
+        return {
+          chain, focusIndex, macroBias, cpiBias, ppiBias, laborBias, slope,
+          treasurySlopeBias, breakevenBias, policyRateBias, fiscalBias,
+        };
       }
 
       function currentFocusIndex(chain, anchorIndex) {
@@ -1930,6 +2015,8 @@
         const cpiData = window.__CPI_DASHBOARD_DATA__;
         const laborData = window.__LABOR_DASHBOARD_DATA__;
         const treasuryData = window.__TREASURY_DASHBOARD_DATA__;
+        const ppiData = window.__PPI_DASHBOARD_DATA__;
+        const fiscalData = window.__FISCAL_DASHBOARD_DATA__;
 
         const signals = fomcData?.signals ?? [
           { label: "Inflation Pressure", score: 5, tone: "hot", mentions: 4 },
@@ -1960,8 +2047,10 @@
         // fresh data is still expected to land before that meeting.
         const freshness = focus.status === "projected" ? clamp(1 - (1 - carryFromPrevious) * 0.5, 0.5, 1) : 1;
         const cpiBias = clamp(timeline.cpiBias * freshness, -1, 1);
+        const ppiBias = clamp(timeline.ppiBias * freshness, -1, 1);
         const laborBias = clamp(timeline.laborBias * freshness, -1, 1);
         const treasurySlopeBias = clamp(timeline.treasurySlopeBias * freshness, -1, 1);
+        const fiscalBias = clamp(timeline.fiscalBias * freshness, -1, 1);
         // Breakevens and money-market rates update daily, so they are already current for
         // any projected meeting and are not damped by the release-freshness factor.
         const breakevenBias = clamp(timeline.breakevenBias, -1, 1);
@@ -1973,8 +2062,10 @@
           decisionStr,
           marketData,
           cpiData,
+          ppiData,
           laborData,
           treasuryData,
+          fiscalData,
           breakevenData: window.__BREAKEVEN_DASHBOARD_DATA__,
           policyRateData: window.__POLICY_RATE_DASHBOARD_DATA__,
           chain,
@@ -1990,11 +2081,13 @@
           marketHold,
           marketCut,
           cpiBias,
+          ppiBias,
           laborBias,
           slope: timeline.slope,
           treasurySlopeBias,
           breakevenBias,
           policyRateBias,
+          fiscalBias,
         };
       }
 
@@ -2140,10 +2233,12 @@
           { label: "Previous Meeting Bias", bias: context.previousBias, detail: `${context.previousBias >= 0 ? "+" : ""}${context.previousBias.toFixed(2)}`, weight: 0.95 },
           { label: "Market Net Bias", bias: context.marketBias, detail: `R ${Math.round(context.marketRaise * 100)}% · H ${Math.round(context.marketHold * 100)}% · C ${Math.round(context.marketCut * 100)}%`, weight: 0.9 },
           { label: "CPI Bias", bias: context.cpiBias, detail: `${context.cpiBias >= 0 ? "+" : ""}${context.cpiBias.toFixed(2)}`, weight: 0.78 },
+          { label: "PPI Bias", bias: context.ppiBias || 0, detail: `${(context.ppiBias || 0) >= 0 ? "+" : ""}${(context.ppiBias || 0).toFixed(2)}`, weight: 0.66 },
           { label: "Labor Bias", bias: context.laborBias, detail: `${context.laborBias >= 0 ? "+" : ""}${context.laborBias.toFixed(2)}`, weight: 0.76 },
           { label: "Treasury Curve Bias", bias: context.treasurySlopeBias, detail: context.slope === null ? "n/a" : `10Y-2Y ${context.slope >= 0 ? "+" : ""}${context.slope.toFixed(2)}`, weight: 0.64 },
           { label: "Breakeven Bias", bias: context.breakevenBias || 0, detail: context.breakevenData?.metrics?.breakeven_10y === undefined ? "n/a" : `10Y BE ${Number(context.breakevenData.metrics.breakeven_10y).toFixed(2)}%`, weight: 0.7 },
           { label: "Funding Stress Bias", bias: context.policyRateBias || 0, detail: context.policyRateData?.metrics?.effr === undefined ? "n/a" : `EFFR ${Number(context.policyRateData.metrics.effr).toFixed(2)}%`, weight: 0.58 },
+          { label: "Fiscal Impulse", bias: context.fiscalBias || 0, detail: context.fiscalData?.metrics?.deficit_billions === undefined ? "n/a" : `deficit $${Number(context.fiscalData.metrics.deficit_billions).toFixed(1)}B`, weight: 0.42 },
         ].sort((a, b) => b.bias - a.bias);
 
         biasNodes.forEach((item, index) => {
@@ -2183,10 +2278,12 @@
           { id: "fomc", label: "FOMC Signals", color: 0xffa657, bias: context.previousBias },
           { id: "market", label: "Markets", color: 0x79c0ff, bias: context.marketBias },
           { id: "cpi", label: "CPI", color: 0xff7b72, bias: context.cpiBias },
+          { id: "ppi", label: "PPI", color: 0xf97583, bias: context.ppiBias || 0 },
           { id: "labor", label: "Labor", color: 0x7bd389, bias: context.laborBias },
           { id: "treasury", label: "Treasuries", color: 0xf2cc60, bias: context.treasurySlopeBias },
           { id: "breakeven", label: "Breakevens", color: 0xffa657, bias: context.breakevenBias || 0 },
           { id: "policyRate", label: "Money Markets", color: 0xd2a8ff, bias: context.policyRateBias || 0 },
+          { id: "fiscal", label: "Fiscal", color: 0xff9f43, bias: context.fiscalBias || 0 },
         ];
         const ringRadius = 5.6;
         const clusters = clusterDefs.map((def, index) => {
@@ -2284,7 +2381,16 @@
           seriesPrefix: "cpi-series:",
           observationPrefix: "cpi-obs:",
           perSeriesLimit: 6,
-        }).map((item) => ({ ...item, dataset: "CPI", color: 0xff7b72, laneY: 4.4 }));
+        }).map((item) => ({ ...item, dataset: "CPI", color: 0xff7b72, laneY: 6.6 }));
+        const ppiObs = extractGraphObservations({
+          graph: window.__PPI_DASHBOARD_DATA__?.ppi_graph,
+          seriesKind: "ppi_series",
+          observationKind: "ppi_observation",
+          seriesPrefix: "ppi-series-",
+          observationPrefix: "ppi-",
+          seriesKeyOf: hyphenDateSeriesKeyOf,
+          perSeriesLimit: 6,
+        }).map((item) => ({ ...item, dataset: "PPI", color: 0xf97583, laneY: 4.4 }));
         const laborObs = extractGraphObservations({
           graph: window.__LABOR_KG_DASHBOARD_DATA__?.labor_graph,
           seriesKind: "labor_series",
@@ -2319,9 +2425,18 @@
           seriesKeyOf: hyphenDateSeriesKeyOf,
           perSeriesLimit: 6,
         }).map((item) => ({ ...item, dataset: "Money Market", color: 0xd2a8ff, laneY: -4.4 }));
+        const fiscalObs = extractGraphObservations({
+          graph: window.__FISCAL_DASHBOARD_DATA__?.fiscal_graph,
+          seriesKind: "fiscal_series",
+          observationKind: "fiscal_observation",
+          seriesPrefix: "fiscal-series-",
+          observationPrefix: "fiscal-",
+          seriesKeyOf: hyphenDateSeriesKeyOf,
+          perSeriesLimit: 6,
+        }).map((item) => ({ ...item, dataset: "Fiscal", color: 0xff9f43, laneY: -6.6 }));
 
-        const points = [...cpiObs, ...laborObs, ...treasuryObs, ...breakevenObs, ...policyRateObs];
-        makeNode(scene, 0, 6.2, 0, 0x8dc8ff, 0.42, "Macro Timeline", "Size = local importance");
+        const points = [...cpiObs, ...ppiObs, ...laborObs, ...treasuryObs, ...breakevenObs, ...policyRateObs, ...fiscalObs];
+        makeNode(scene, 0, 8.4, 0, 0x8dc8ff, 0.42, "Macro Timeline", "Size = local importance");
         if (!points.length) {
           addReferenceGrid(scene);
           return;
@@ -2436,6 +2551,16 @@
             observationPrefix: "labor-obs:",
           },
           {
+            domain: "PPI",
+            color: 0xf97583,
+            graph: window.__PPI_DASHBOARD_DATA__?.ppi_graph,
+            seriesKind: "ppi_series",
+            observationKind: "ppi_observation",
+            seriesPrefix: "ppi-series-",
+            observationPrefix: "ppi-",
+            seriesKeyOf: hyphenDateSeriesKeyOf,
+          },
+          {
             domain: "Treasury",
             color: 0xf2cc60,
             graph: window.__TREASURY_DASHBOARD_DATA__?.treasury_graph,
@@ -2462,6 +2587,16 @@
             observationKind: "policy_rate_observation",
             seriesPrefix: "policy-rate-series-",
             observationPrefix: "policy-rate-",
+            seriesKeyOf: hyphenDateSeriesKeyOf,
+          },
+          {
+            domain: "Fiscal",
+            color: 0xff9f43,
+            graph: window.__FISCAL_DASHBOARD_DATA__?.fiscal_graph,
+            seriesKind: "fiscal_series",
+            observationKind: "fiscal_observation",
+            seriesPrefix: "fiscal-series-",
+            observationPrefix: "fiscal-",
             seriesKeyOf: hyphenDateSeriesKeyOf,
           },
         ];
@@ -2558,6 +2693,13 @@
           };
         });
 
+        const fiscalChildren = (context.fiscalData?.latest_values || []).map((item) => ({
+          label: String(item?.label || item?.series_id || "fiscal"),
+          weight: item?.series_id === "deficit" ? 0.8 : 0.5,
+          bias: clamp(context.fiscalBias || 0, -1, 1),
+          detail: `$${Number(item?.value_billions || 0).toFixed(1)}B`,
+        }));
+
         const domains = [
           { label: "FOMC Statement", color: 0xffa657, bias: context.previousBias, children: signalChildren },
           {
@@ -2571,10 +2713,12 @@
             ],
           },
           { label: "CPI", color: 0xff7b72, bias: context.cpiBias, children: groupByCategory(context.cpiData?.latest_values, "cpi", context.cpiBias) },
+          { label: "PPI", color: 0xf97583, bias: context.ppiBias || 0, children: groupByCategory(context.ppiData?.latest_values, "ppi", context.ppiBias || 0) },
           { label: "Labor", color: 0x7bd389, bias: context.laborBias, children: groupByCategory(context.laborData?.latest_values, "labor", context.laborBias) },
           { label: "Treasuries", color: 0xf2cc60, bias: context.treasurySlopeBias, children: treasuryChildren },
           { label: "Breakevens", color: 0xffa657, bias: context.breakevenBias || 0, children: breakevenChildren },
           { label: "Money Markets", color: 0xd2a8ff, bias: context.policyRateBias || 0, children: policyRateChildren },
+          { label: "Fiscal", color: 0xff9f43, bias: context.fiscalBias || 0, children: fiscalChildren },
         ].filter((domain) => domain.children.length);
 
         const domainWeights = domains.map((domain) => domain.children.reduce((sum, child) => sum + child.weight, 0));
@@ -2745,18 +2889,23 @@
       }
 
       // Shared model: how the focused meeting's bias falls out of its inputs.
-      // Macro blend weights. CPI stays dominant, but market-implied expectations
-      // (breakevens) carry real weight because the committee treats de-anchoring as
-      // its own trigger, and funding stress acts as a smaller brake on tightening.
-      const MACRO_WEIGHTS = { cpi: 0.34, labor: 0.26, breakeven: 0.20, treasury: 0.12, policyRate: 0.08 };
+      // Direct inflation and labor readings dominate. Fiscal impulse and funding
+      // conditions remain deliberately small because they affect the decision less
+      // directly than observed prices, employment, and inflation expectations.
+      const MACRO_WEIGHTS = {
+        cpi: 0.27, ppi: 0.15, labor: 0.23, breakeven: 0.16,
+        treasury: 0.10, policyRate: 0.05, fiscal: 0.04,
+      };
 
-      function blendMacro({ cpi, labor, breakeven, treasury, policyRate }) {
+      function blendMacro({ cpi, ppi, labor, breakeven, treasury, policyRate, fiscal }) {
         return clamp(
           MACRO_WEIGHTS.cpi * cpi
+          + MACRO_WEIGHTS.ppi * ppi
           + MACRO_WEIGHTS.labor * labor
           + MACRO_WEIGHTS.breakeven * breakeven
           + MACRO_WEIGHTS.treasury * treasury
-          + MACRO_WEIGHTS.policyRate * policyRate,
+          + MACRO_WEIGHTS.policyRate * policyRate
+          + MACRO_WEIGHTS.fiscal * fiscal,
           -1,
           1,
         );
@@ -2764,13 +2913,15 @@
 
       function biasModel(context, overrides = {}) {
         const cpi = overrides.cpi ?? context.cpiBias;
+        const ppi = overrides.ppi ?? (context.ppiBias || 0);
         const labor = overrides.labor ?? context.laborBias;
         const treasury = overrides.treasury ?? context.treasurySlopeBias;
         const breakeven = overrides.breakeven ?? (context.breakevenBias || 0);
         const policyRate = overrides.policyRate ?? (context.policyRateBias || 0);
+        const fiscal = overrides.fiscal ?? (context.fiscalBias || 0);
         const previous = overrides.previous ?? context.previousBias;
         const carry = clamp(overrides.carry ?? (context.carryFromPrevious || 0.4), 0, 1);
-        const macro = blendMacro({ cpi, labor, breakeven, treasury, policyRate });
+        const macro = blendMacro({ cpi, ppi, labor, breakeven, treasury, policyRate, fiscal });
         const bias = clamp(previous * carry + macro * (1 - carry), -1, 1);
         const probabilities = probabilitiesFromBias(bias, context.focus?.confidence ?? 0.45);
         const decision = Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0][0];
@@ -2819,6 +2970,7 @@
             })),
           },
           { label: "CPI", color: 0xff7b72, bias: context.cpiBias, weight: 0.9, sources: groupCategories(context.cpiData?.latest_values, "cpi") },
+          { label: "PPI", color: 0xf97583, bias: context.ppiBias || 0, weight: 0.65, sources: groupCategories(context.ppiData?.latest_values, "ppi") },
           { label: "Labor", color: 0x7bd389, bias: context.laborBias, weight: 0.85, sources: groupCategories(context.laborData?.latest_values, "labor") },
           {
             label: "Treasuries",
@@ -2850,6 +3002,17 @@
             sources: (context.policyRateData?.latest_values || []).map((item) => ({
               label: String(item?.label || item?.series_id || "rate"),
               weight: 0.5,
+              count: 1,
+            })),
+          },
+          {
+            label: "Fiscal",
+            color: 0xff9f43,
+            bias: context.fiscalBias || 0,
+            weight: 0.4,
+            sources: (context.fiscalData?.latest_values || []).map((item) => ({
+              label: String(item?.label || item?.series_id || "fiscal"),
+              weight: item?.series_id === "deficit" ? 0.8 : 0.5,
               count: 1,
             })),
           },
@@ -2946,25 +3109,31 @@
 
       function domainSigmas() {
         const cpiHistory = (window.__CPI_DASHBOARD_DATA__ || {}).bias_history;
+        const ppiHistory = (window.__PPI_DASHBOARD_DATA__ || {}).bias_history;
         const laborHistory = (window.__LABOR_DASHBOARD_DATA__ || {}).bias_history;
         const treasuryHistory = (window.__TREASURY_DASHBOARD_DATA__ || {}).slope_history;
         const breakevenHistory = (window.__BREAKEVEN_DASHBOARD_DATA__ || {}).bias_history;
         const policyRateHistory = (window.__POLICY_RATE_DASHBOARD_DATA__ || {}).bias_history;
+        const fiscalHistory = (window.__FISCAL_DASHBOARD_DATA__ || {}).bias_history;
         // Monthly series step once per print; daily series are compared across the
         // ~30 trading days that typically separate FOMC-relevant releases.
         const dailyLag = 30;
         return {
           cpi: biasHistorySigma(cpiHistory, 0.1),
+          ppi: biasHistorySigma(ppiHistory, 0.12),
           labor: biasHistorySigma(laborHistory, 0.1),
           treasury: biasHistorySigma(treasuryHistory, 0.08, dailyLag),
           breakeven: biasHistorySigma(breakevenHistory, 0.04, dailyLag),
           policyRate: biasHistorySigma(policyRateHistory, 0.05, dailyLag),
+          fiscal: biasHistorySigma(fiscalHistory, 0.12),
           observations: {
             cpi: Array.isArray(cpiHistory) ? cpiHistory.length : 0,
+            ppi: Array.isArray(ppiHistory) ? ppiHistory.length : 0,
             labor: Array.isArray(laborHistory) ? laborHistory.length : 0,
             treasury: Array.isArray(treasuryHistory) ? treasuryHistory.length : 0,
             breakeven: Array.isArray(breakevenHistory) ? breakevenHistory.length : 0,
             policyRate: Array.isArray(policyRateHistory) ? policyRateHistory.length : 0,
+            fiscal: Array.isArray(fiscalHistory) ? fiscalHistory.length : 0,
           },
         };
       }
@@ -2972,10 +3141,12 @@
       function buildGraphExperiment7(scene, context) {
         const sigmas = domainSigmas();
         const sigmaCpi = sigmas.cpi;
+        const sigmaPpi = sigmas.ppi;
         const sigmaLabor = sigmas.labor;
         const sigmaTreasury = sigmas.treasury;
         const sigmaBreakeven = sigmas.breakeven;
         const sigmaPolicyRate = sigmas.policyRate;
+        const sigmaFiscal = sigmas.fiscal;
         const sigmaCarry = clamp(0.5 * (1 - (context.carryFromPrevious || 0.4)), 0.05, 0.3);
 
         const baseline = biasModel(context);
@@ -2987,17 +3158,21 @@
 
         for (let i = 0; i < draws; i += 1) {
           const cpiShock = gaussian(random) * sigmaCpi;
+          const ppiShock = gaussian(random) * sigmaPpi;
           const laborShock = gaussian(random) * sigmaLabor;
           const treasuryShock = gaussian(random) * sigmaTreasury;
           const breakevenShock = gaussian(random) * sigmaBreakeven;
           const policyRateShock = gaussian(random) * sigmaPolicyRate;
+          const fiscalShock = gaussian(random) * sigmaFiscal;
           const carryShock = gaussian(random) * sigmaCarry;
           const sample = biasModel(context, {
             cpi: clamp(context.cpiBias + cpiShock, -1, 1),
+            ppi: clamp((context.ppiBias || 0) + ppiShock, -1, 1),
             labor: clamp(context.laborBias + laborShock, -1, 1),
             treasury: clamp(context.treasurySlopeBias + treasuryShock, -1, 1),
             breakeven: clamp((context.breakevenBias || 0) + breakevenShock, -1, 1),
             policyRate: clamp((context.policyRateBias || 0) + policyRateShock, -1, 1),
+            fiscal: clamp((context.fiscalBias || 0) + fiscalShock, -1, 1),
             carry: clamp((context.carryFromPrevious || 0.4) + carryShock, 0, 1),
           });
           biasSum += sample.bias;
@@ -3078,7 +3253,8 @@
           "shock axes",
           `z = CPI shock (σ ${sigmaCpi.toFixed(3)} over ${sigmas.observations.cpi} prints), ` +
             `y = labor shock (σ ${sigmaLabor.toFixed(3)} over ${sigmas.observations.labor} prints), ` +
-            `curve σ ${sigmaTreasury.toFixed(3)} · breakeven σ ${sigmaBreakeven.toFixed(3)} · funding σ ${sigmaPolicyRate.toFixed(3)}`,
+            `PPI σ ${sigmaPpi.toFixed(3)} · curve σ ${sigmaTreasury.toFixed(3)} · ` +
+            `breakeven σ ${sigmaBreakeven.toFixed(3)} · funding σ ${sigmaPolicyRate.toFixed(3)} · fiscal σ ${sigmaFiscal.toFixed(3)}`,
         );
         addReferenceGrid(scene);
       }
@@ -3089,10 +3265,12 @@
 
         const inputs = [
           { key: "cpi", label: "CPI Bias", base: context.cpiBias, color: 0xff7b72, min: -1, max: 1 },
+          { key: "ppi", label: "PPI Bias", base: context.ppiBias || 0, color: 0xf97583, min: -1, max: 1 },
           { key: "labor", label: "Labor Bias", base: context.laborBias, color: 0x7bd389, min: -1, max: 1 },
           { key: "treasury", label: "Curve Bias", base: context.treasurySlopeBias, color: 0xf2cc60, min: -1, max: 1 },
           { key: "breakeven", label: "Breakeven Bias", base: context.breakevenBias || 0, color: 0xffa657, min: -1, max: 1 },
           { key: "policyRate", label: "Funding Stress", base: context.policyRateBias || 0, color: 0xd2a8ff, min: -1, max: 1 },
+          { key: "fiscal", label: "Fiscal Impulse", base: context.fiscalBias || 0, color: 0xff9f43, min: -1, max: 1 },
           { key: "previous", label: "Prior Meeting Bias", base: context.previousBias, color: 0xffa657, min: -1, max: 1 },
           { key: "carry", label: "Carry-over", base: clamp(context.carryFromPrevious || 0.4, 0, 1), color: 0x79c0ff, min: 0, max: 1 },
         ];

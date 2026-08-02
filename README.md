@@ -5,8 +5,9 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 ## Data sources
 
 - **Federal Reserve**: official FOMC statement pages
-- **BLS**: CPI and labor time-series data
+- **BLS**: CPI, PPI, and labor time-series data
 - **U.S. Treasury**: daily par yield curve rates (1 Mo through 30 Yr), plus TIPS real yields used to derive breakeven inflation expectations
+- **Treasury Fiscal Data**: Monthly Treasury Statement receipts, outlays, and deficit/surplus
 - **NY Fed**: overnight reference rates (EFFR, SOFR, OBFR, BGCR, TGCR) and the published FOMC target band
 - **Kalshi + Polymarket**: market odds for upcoming FOMC outcomes
 
@@ -17,7 +18,7 @@ Windows Task Scheduler jobs under `\WhatTheFed\` keep the local database current
 | Task | Cadence | Script |
 | --- | --- | --- |
 | Market Ingestion | Daily 08:00 | `scripts/run-market-ingestion.ps1` |
-| Macro Ingestion (CPI + labor) | Daily 06:30 | `scripts/run-macro-ingestion.ps1` |
+| Macro Ingestion (CPI + PPI + labor + fiscal) | Daily 06:30 | `scripts/run-macro-ingestion.ps1` |
 | Treasury Ingestion (curve + breakevens) | Weekdays 15:00 | `scripts/run-treasury-ingestion.ps1` |
 | Policy Rates Ingestion | Weekdays 07:00 | `scripts/run-policy-rates-ingestion.ps1` |
 
