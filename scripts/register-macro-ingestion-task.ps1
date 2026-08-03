@@ -33,7 +33,7 @@ foreach ($segment in $segments) {
 $startAt = [DateTime]::ParseExact($RunAt, "HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
 $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$runnerScript`""
 # BLS releases and the Monthly Treasury Statement are revision-prone; a daily
-# refresh safely picks up new CPI, PPI, labor, and fiscal publications.
+# refresh safely picks up new CPI, PPI, labor, GDP, and fiscal publications.
 # since the release calendar moves around within the month.
 $taskTrigger = New-ScheduledTaskTrigger -Daily -At $startAt
 $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -47,7 +47,7 @@ if ($null -ne $existingRootTask -and $TaskPath -ne "\") {
 Register-ScheduledTask `
     -TaskName $TaskName `
     -TaskPath $TaskPath `
-    -Description "Daily ingestion of BLS CPI, PPI, labor, and Treasury fiscal series for WhatTheFed." `
+    -Description "Daily ingestion of BLS CPI, PPI, labor, BEA GDP, and Treasury fiscal series for WhatTheFed." `
     -Action $taskAction `
     -Trigger $taskTrigger `
     -Settings $taskSettings `

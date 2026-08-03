@@ -54,6 +54,14 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Fiscal ingestion exited with code $LASTEXITCODE."
     }
+
+    & $pythonPath -c "from whatthefed.gdp_ingestion import main; raise SystemExit(main())" `
+        --db-path $dbPath `
+        --start-year ($endYear - 12) `
+        --dashboard-js (Join-Path $repoRoot "data\gdp_dashboard_data.js") *>> $logPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "GDP ingestion exited with code $LASTEXITCODE."
+    }
 }
 finally {
     Pop-Location
