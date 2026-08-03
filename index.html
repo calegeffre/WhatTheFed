@@ -160,6 +160,10 @@
     .heat-balanced { background: rgba(102, 199, 244, 0.16); }
     .heat-cool { background: rgba(123, 211, 137, 0.16); }
     .heat-cold { background: rgba(78, 205, 196, 0.16); }
+    .heat-missing {
+      background: rgba(255, 107, 107, 0.08);
+      border-color: rgba(255, 107, 107, 0.45);
+    }
 
     .section {
       margin-top: 24px;
@@ -600,12 +604,6 @@
   <script src="data/gdp_dashboard_data.js"></script>
   <script>
     const dashboardData = {
-      next_meeting_prediction: {
-        decision: "raise",
-        confidence: 0.9,
-        rationale: "fomc_2026_07: hawkish=2, dovish=0; jobs: hawkish=1, dovish=0; cpi: hawkish=1, dovish=0",
-      },
-      evidence_sources: ["fomc_2026_07", "jobs", "cpi", "gdp"],
       meeting_history: [
         {
           label: "July 2026",
@@ -677,14 +675,6 @@
           votes: ["hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "cut", "cut"],
         },
       ],
-      dashboard: {
-        next_meeting_heat_map: [
-          { label: "Inflation Pressure", score: 5, tone: "hot", sources: ["fomc_2026_07", "cpi"] },
-          { label: "Labor Strength", score: 5, tone: "hot", sources: ["fomc_2026_07", "jobs"] },
-          { label: "Growth Momentum", score: 2, tone: "cool", sources: ["jobs", "gdp"] },
-          { label: "Previous Meeting Bias", score: 4, tone: "warm", sources: ["fomc_2026_07", "cpi", "jobs"] },
-        ],
-      },
     };
 
     const fomcOverlay = window.__FOMC_DASHBOARD_DATA__;
@@ -783,28 +773,16 @@
       return "cold";
     };
 
-    const marketPrediction = (() => {
-      if (!marketOverlay || !marketOverlay.blended_probabilities) return null;
-      const blended = normalizeTriplet(marketOverlay.blended_probabilities);
-      const ordered = Object.entries(blended).sort((a, b) => b[1] - a[1]);
-      const [decision, confidence] = ordered[0];
-      const providerNotes = Object.entries(marketOverlay.providers || {}).map(([provider, payload]) => {
-        const providerBlend = normalizeTriplet(payload.probabilities || {});
-        return `${provider}: R ${formatPct(providerBlend.raise)}, H ${formatPct(providerBlend.hold)}, C ${formatPct(providerBlend.cut)}`;
-      });
-      return {
-        decision,
-        confidence,
-        probabilityLabel: "market probability",
-        rationale:
-          `Market blend (${marketOverlay.target_meeting}): ` +
-          `R ${formatPct(blended.raise)}, H ${formatPct(blended.hold)}, C ${formatPct(blended.cut)}.` +
-          (providerNotes.length ? ` Providers: ${providerNotes.join("; ")}` : ""),
-      };
-    })();
-
     const allDataPrediction = (() => {
       const marketProbabilities = normalizeTriplet(marketOverlay?.blended_probabilities);
+      const marketTotal =
+        marketProbabilities.raise + marketProbabilities.hold + marketProbabilities.cut;
+      const missingMarketProviders = ["kalshi", "polymarket"].filter((provider) => {
+        const probabilities = normalizeTriplet(marketOverlay?.providers?.[provider]?.probabilities);
+        return probabilities.raise + probabilities.hold + probabilities.cut <= 0;
+      });
+      const marketDataValid =
+        Boolean(marketOverlay?.target_meeting) && marketTotal > 0 && !missingMarketProviders.length;
       const marketConfidence = Math.max(
         marketProbabilities.raise,
         marketProbabilities.hold,
@@ -831,18 +809,26 @@
         .filter(([, value]) => !Number.isFinite(value))
         .map(([key]) => key);
       if (
-        !marketPrediction
+        !marketDataValid
         || !Number.isFinite(previousBias)
         || !fomcOverlay?.meeting_date
         || !marketOverlay?.target_meeting
         || missingInputs.length
       ) {
-        console.warn("All-data prediction unavailable.", {
-          missingInputs,
-          hasMarketPrediction: Boolean(marketPrediction),
-          previousBias,
-        });
-        return null;
+        const missing = [
+          ...(!marketDataValid ? ["prediction markets"] : []),
+          ...missingMarketProviders.map((provider) => `${provider} market`),
+          ...(!Number.isFinite(previousBias) || !fomcOverlay?.meeting_date ? ["FOMC bias"] : []),
+          ...missingInputs,
+        ];
+        console.error("All-data prediction unavailable.", { missing });
+        return {
+          decision: "?",
+          confidence: null,
+          probabilityLabel: "model probability",
+          error: true,
+          rationale: `Prediction unavailable: missing or invalid ${[...new Set(missing)].join(", ")} data.`,
+        };
       }
 
       const daysToMeeting =
@@ -880,16 +866,26 @@
       };
     })();
 
+    const missingHeatCard = (label, payloadName) => ({
+      label,
+      display: "?",
+      toneLabel: "data unavailable",
+      tone: "missing",
+      sources: [`ERROR: missing ${payloadName} payload`],
+    });
+
     const marketHeatCards = (() => {
-      if (!marketOverlay || !marketOverlay.providers) return [];
       const toneFromDecision = { raise: "hot", hold: "balanced", cut: "cold" };
       const decisionArrow   = { raise: "↑", hold: "→", cut: "↓" };
-      return Object.entries(marketOverlay.providers).map(([provider, payload]) => {
+      return ["kalshi", "polymarket"].map((provider) => {
+        const payload = marketOverlay?.providers?.[provider];
+        const name = provider.charAt(0).toUpperCase() + provider.slice(1);
+        if (!payload?.probabilities) return missingHeatCard(name, `${provider} market`);
         const probs = normalizeTriplet(payload.probabilities || {});
+        if (probs.raise + probs.hold + probs.cut <= 0) return missingHeatCard(name, `${provider} market`);
         const [topDecision] = Object.entries(probs).sort((a, b) => b[1] - a[1])[0];
         const topPct = probs[topDecision];
         const tone = toneFromDecision[topDecision] ?? "balanced";
-        const name = provider.charAt(0).toUpperCase() + provider.slice(1);
         return {
           label: name,
           display: formatPct(topPct),
@@ -907,43 +903,68 @@
     })();
 
     const cpiHeatCards = (() => {
-      if (!cpiOverlay || !cpiOverlay.heat_card) return [];
+      if (!cpiOverlay?.heat_card) return [missingHeatCard("CPI", "CPI")];
       return [cpiOverlay.heat_card];
     })();
 
     const laborHeatCards = (() => {
-      if (!laborOverlay || !laborOverlay.heat_card) return [];
+      if (!laborOverlay?.heat_card) return [missingHeatCard("Labor", "labor")];
       return [laborOverlay.heat_card];
     })();
 
     const policyRateHeatCards = (() => {
-      if (!policyRateOverlay || !policyRateOverlay.heat_card) return [];
+      if (!policyRateOverlay?.heat_card) return [missingHeatCard("Policy Rates", "NY Fed policy-rate")];
       return [policyRateOverlay.heat_card];
     })();
 
     const breakevenHeatCards = (() => {
-      if (!breakevenOverlay || !breakevenOverlay.heat_card) return [];
+      if (!breakevenOverlay?.heat_card) return [missingHeatCard("Breakevens", "TIPS breakeven")];
       return [breakevenOverlay.heat_card];
     })();
 
+    const treasuryHeatCards = (() => {
+      const pointByMaturity = (maturity) =>
+        (treasuryOverlay?.points || []).find((point) => String(point?.maturity) === maturity);
+      const y2 = Number(pointByMaturity("2Y")?.yield_pct);
+      const y10 = Number(pointByMaturity("10Y")?.yield_pct);
+      if (!Number.isFinite(y2) || !Number.isFinite(y10)) {
+        return [missingHeatCard("Treasury Curve", "Treasury curve")];
+      }
+      const slope = y10 - y2;
+      const bias = Math.max(-1, Math.min(1, slope / 1.5));
+      const score = Math.max(1, Math.min(5, Math.round(3 + bias * 2)));
+      return [{
+        label: "Treasury Curve",
+        display: `${slope >= 0 ? "+" : ""}${slope.toFixed(2)} pp`,
+        toneLabel: `bias ${bias >= 0 ? "+" : ""}${bias.toFixed(2)}`,
+        score,
+        tone: toneFromScore(score),
+        sources: [
+          `2Y ${y2.toFixed(2)}%`,
+          `10Y ${y10.toFixed(2)}%`,
+          `Treasury ${treasuryOverlay.latest_snapshot_at || "date unavailable"}`,
+        ],
+      }];
+    })();
+
     const ppiHeatCards = (() => {
-      if (!ppiOverlay || !ppiOverlay.heat_card) return [];
+      if (!ppiOverlay?.heat_card) return [missingHeatCard("PPI", "PPI")];
       return [ppiOverlay.heat_card];
     })();
 
     const fiscalHeatCards = (() => {
-      if (!fiscalOverlay || !fiscalOverlay.heat_card) return [];
+      if (!fiscalOverlay?.heat_card) return [missingHeatCard("Fiscal Impulse", "Treasury fiscal")];
       return [fiscalOverlay.heat_card];
     })();
 
     const gdpHeatCards = (() => {
-      if (!gdpOverlay || !gdpOverlay.heat_card) return [];
+      if (!gdpOverlay?.heat_card) return [missingHeatCard("GDP Growth", "BEA GDP")];
       return [gdpOverlay.heat_card];
     })();
 
     const fomcHeatCards = (() => {
       if (!fomcOverlay || !Array.isArray(fomcOverlay.signals) || !fomcOverlay.signals.length) {
-        return dashboardData.dashboard.next_meeting_heat_map;
+        return [missingHeatCard("FOMC Signals", "FOMC")];
       }
       return fomcOverlay.signals.map((signal) => {
         const score = Math.max(1, Math.min(5, Number(signal?.score || 3)));
@@ -958,31 +979,33 @@
       });
     })();
 
-    const activePrediction = allDataPrediction || marketPrediction || dashboardData.next_meeting_prediction;
+    const activePrediction = allDataPrediction;
     const combinedHeatMap = [
       ...fomcHeatCards,
       ...cpiHeatCards,
       ...ppiHeatCards,
       ...laborHeatCards,
       ...breakevenHeatCards,
+      ...treasuryHeatCards,
       ...policyRateHeatCards,
       ...fiscalHeatCards,
       ...gdpHeatCards,
       ...marketHeatCards,
     ];
 
-    const nextMeetingDate = marketOverlay?.target_meeting || fomcOverlay?.meeting_date || "N/A";
+    const nextMeetingDate = marketOverlay?.target_meeting || fomcOverlay?.meeting_date || "?";
     document.getElementById("summary").textContent =
       `All-data model using FOMC, macro, Treasury, rates, and market signals. Next FOMC Meeting: ${nextMeetingDate}`;
     document.getElementById("prediction-title").textContent =
       `Predicted next move: ${String(activePrediction.decision).toUpperCase()}`;
     document.getElementById("confidence").textContent =
-      `${Math.round(Number(activePrediction.confidence || 0) * 100)}% ` +
-      `${activePrediction.probabilityLabel || "confidence"}`;
+      activePrediction.error
+        ? `? ${activePrediction.probabilityLabel}`
+        : `${Math.round(Number(activePrediction.confidence) * 100)}% ${activePrediction.probabilityLabel}`;
     document.getElementById("rationale").textContent = activePrediction.rationale;
 
     const sources = document.getElementById("sources");
-    const sourceItems = new Set(dashboardData.evidence_sources);
+    const sourceItems = new Set();
     if (fomcOverlay && fomcOverlay.meeting_date) {
       sourceItems.add(`fomc:${fomcOverlay.meeting_date}`);
     }

@@ -30,6 +30,8 @@ Every input is normalized to a `-1` (dovish/cut) to `+1` (hawkish/raise) scale.
 The final bias is converted to raise/hold/cut probabilities with a softmax that
 preserves a neutral preference for holding. Experiment 7 applies empirical
 shocks to this baseline over 520 deterministic Monte Carlo draws.
+If any required payload is missing or invalid, the headline and affected heat
+cards display `?` with an error instead of substituting fallback values.
 
 ## Refresh schedule
 
