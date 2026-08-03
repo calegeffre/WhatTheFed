@@ -14,21 +14,20 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 
 ## Refresh schedule
 
-Windows Task Scheduler jobs under `\WhatTheFed\` keep the local database current:
+GitHub Actions is the primary ingestion and deployment path. The
+`.github/workflows/deploy-pages.yml` workflow rebuilds every data source using
+disposable SQLite, then deploys the generated browser assets to GitHub Pages.
 
-| Task | Cadence | Script |
-| --- | --- | --- |
-| Market Ingestion | Daily 08:00 | `scripts/run-market-ingestion.ps1` |
-| Macro Ingestion (CPI + PPI + labor + GDP + fiscal) | Daily 06:30 | `scripts/run-macro-ingestion.ps1` |
-| Treasury Ingestion (curve + breakevens) | Weekdays 15:00 | `scripts/run-treasury-ingestion.ps1` |
-| Policy Rates Ingestion | Weekdays 07:00 | `scripts/run-policy-rates-ingestion.ps1` |
+| Trigger | Cadence |
+| --- | --- |
+| Scheduled morning refresh | Daily at 15:30 UTC |
+| Scheduled afternoon refresh | Weekdays at 23:30 UTC |
+| Relevant changes on `main` | After each push |
+| Manual refresh | `workflow_dispatch` from GitHub Actions |
 
-Register them with the matching `scripts/register-*-task.ps1` scripts.
-
-The public dashboard is refreshed by `.github/workflows/deploy-pages.yml` at 15:30 UTC
-daily and 23:30 UTC on weekdays. It also runs after relevant pushes to `main` or
-manually through GitHub Actions. Configure the repository's Pages source as
-**GitHub Actions** before the first deployment.
+The PowerShell ingestion scripts remain available for manually refreshing the
+local database. Windows Task Scheduler registration scripts are optional and
+are not required for the hosted dashboard.
 
 ## Storage and outputs
 
