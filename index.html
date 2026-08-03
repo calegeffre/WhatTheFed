@@ -715,6 +715,64 @@
         cut: parsed.cut / total,
       };
     };
+    const decisionModel = (() => {
+      const macroWeights = Object.freeze({
+        cpi: 0.24,
+        ppi: 0.12,
+        labor: 0.21,
+        gdp: 0.12,
+        breakeven: 0.14,
+        treasury: 0.08,
+        policyRate: 0.05,
+        fiscal: 0.04,
+      });
+      const ensembleWeights = Object.freeze({ market: 0.45, policy: 0.55 });
+      const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+
+      function blendMacro(inputs) {
+        return clamp(
+          Object.entries(macroWeights).reduce(
+            (sum, [key, weight]) => sum + weight * clamp(Number(inputs[key] || 0), -1, 1),
+            0,
+          ),
+          -1,
+          1,
+        );
+      }
+
+      function probabilitiesFromBias(bias, confidence) {
+        const temperature = 1.6 + 2.4 * clamp(confidence, 0, 1);
+        const utilities = { raise: bias, hold: 0.45, cut: -bias };
+        const weights = Object.fromEntries(
+          Object.entries(utilities).map(([key, value]) => [key, Math.exp(value * temperature)]),
+        );
+        const total = weights.raise + weights.hold + weights.cut;
+        return { raise: weights.raise / total, hold: weights.hold / total, cut: weights.cut / total };
+      }
+
+      function evaluate({ marketBias, previousBias, carry, macroInputs, confidence }) {
+        const macroBias = blendMacro(macroInputs);
+        const boundedCarry = clamp(carry, 0, 1);
+        const policyBias = clamp(
+          previousBias * boundedCarry + macroBias * (1 - boundedCarry),
+          -1,
+          1,
+        );
+        const bias = clamp(
+          ensembleWeights.market * marketBias + ensembleWeights.policy * policyBias,
+          -1,
+          1,
+        );
+        const probabilities = probabilitiesFromBias(bias, confidence);
+        const [decision, decisionConfidence] =
+          Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0];
+        return { bias, macroBias, policyBias, probabilities, decision, confidence: decisionConfidence };
+      }
+
+      return { macroWeights, ensembleWeights, blendMacro, probabilitiesFromBias, evaluate };
+    })();
+    window.__WTF_DECISION_MODEL__ = decisionModel;
+
     const formatPct = (value) => `${Math.round((value || 0) * 100)}%`;
     const scoreFromProbability = (value) => Math.max(1, Math.min(5, Math.round((value || 0) * 5)));
     const toneFromScore = (score) => {
@@ -737,10 +795,88 @@
       return {
         decision,
         confidence,
+        probabilityLabel: "market probability",
         rationale:
           `Market blend (${marketOverlay.target_meeting}): ` +
           `R ${formatPct(blended.raise)}, H ${formatPct(blended.hold)}, C ${formatPct(blended.cut)}.` +
           (providerNotes.length ? ` Providers: ${providerNotes.join("; ")}` : ""),
+      };
+    })();
+
+    const allDataPrediction = (() => {
+      const marketProbabilities = normalizeTriplet(marketOverlay?.blended_probabilities);
+      const marketConfidence = Math.max(
+        marketProbabilities.raise,
+        marketProbabilities.hold,
+        marketProbabilities.cut,
+      );
+      const priorSignal = (fomcOverlay?.signals || []).find((signal) =>
+        String(signal?.label || "").toLowerCase().includes("bias"));
+      const previousBias = Number(priorSignal?.display);
+      const pointByMaturity = (maturity) =>
+        (treasuryOverlay?.points || []).find((point) => String(point?.maturity) === maturity);
+      const y2 = Number(pointByMaturity("2Y")?.yield_pct);
+      const y10 = Number(pointByMaturity("10Y")?.yield_pct);
+      const macroInputs = {
+        cpi: Number(cpiOverlay?.metrics?.cpi_bias),
+        ppi: Number(ppiOverlay?.metrics?.ppi_bias),
+        labor: Number(laborOverlay?.metrics?.labor_bias),
+        gdp: Number(gdpOverlay?.metrics?.gdp_bias),
+        breakeven: Number(breakevenOverlay?.metrics?.breakeven_bias),
+        treasury: Number.isFinite(y2) && Number.isFinite(y10) ? (y10 - y2) / 1.5 : NaN,
+        policyRate: Number(policyRateOverlay?.metrics?.policy_rate_bias),
+        fiscal: Number(fiscalOverlay?.metrics?.fiscal_bias),
+      };
+      const missingInputs = Object.entries(macroInputs)
+        .filter(([, value]) => !Number.isFinite(value))
+        .map(([key]) => key);
+      if (
+        !marketPrediction
+        || !Number.isFinite(previousBias)
+        || !fomcOverlay?.meeting_date
+        || !marketOverlay?.target_meeting
+        || missingInputs.length
+      ) {
+        console.warn("All-data prediction unavailable.", {
+          missingInputs,
+          hasMarketPrediction: Boolean(marketPrediction),
+          previousBias,
+        });
+        return null;
+      }
+
+      const daysToMeeting =
+        Math.abs(Date.parse(marketOverlay.target_meeting) - Date.parse(fomcOverlay.meeting_date)) / 86400000;
+      const expectedMonthlyReleases = Math.max(
+        1,
+        Math.round((Number.isFinite(daysToMeeting) ? daysToMeeting : 49) / 30),
+      );
+      const carry = Math.max(0.15, Math.min(0.9, 1 / (1 + expectedMonthlyReleases * 0.55)));
+      const marketBias = marketProbabilities.raise - marketProbabilities.cut;
+      const result = decisionModel.evaluate({
+        marketBias,
+        previousBias,
+        carry,
+        macroInputs,
+        confidence: marketConfidence,
+      });
+      const macroWeightText = Object.entries(decisionModel.macroWeights)
+        .map(([key, weight]) => {
+          const labels = { policyRate: "policy rates", breakeven: "breakevens" };
+          return `${labels[key] || key.toUpperCase()} ${Math.round(weight * 100)}%`;
+        })
+        .join(", ");
+      return {
+        ...result,
+        probabilityLabel: "model probability",
+        rationale:
+          `All-data ensemble (${marketOverlay.target_meeting}): ` +
+          `R ${formatPct(result.probabilities.raise)}, H ${formatPct(result.probabilities.hold)}, ` +
+          `C ${formatPct(result.probabilities.cut)}. ` +
+          `Net bias ${result.bias >= 0 ? "+" : ""}${result.bias.toFixed(2)} = ` +
+          `45% markets + 55% policy model; policy model = ` +
+          `${Math.round(carry * 100)}% prior FOMC + ${Math.round((1 - carry) * 100)}% macro. ` +
+          `Macro weights: ${macroWeightText}.`,
       };
     })();
 
@@ -822,7 +958,7 @@
       });
     })();
 
-    const activePrediction = marketPrediction || dashboardData.next_meeting_prediction;
+    const activePrediction = allDataPrediction || marketPrediction || dashboardData.next_meeting_prediction;
     const combinedHeatMap = [
       ...fomcHeatCards,
       ...cpiHeatCards,
@@ -837,11 +973,12 @@
 
     const nextMeetingDate = marketOverlay?.target_meeting || fomcOverlay?.meeting_date || "N/A";
     document.getElementById("summary").textContent =
-      `Mix of parsed FOMC statements, daily market snapshots. Next FOMC Meeting: ${nextMeetingDate}`;
+      `All-data model using FOMC, macro, Treasury, rates, and market signals. Next FOMC Meeting: ${nextMeetingDate}`;
     document.getElementById("prediction-title").textContent =
       `Predicted next move: ${String(activePrediction.decision).toUpperCase()}`;
     document.getElementById("confidence").textContent =
-      `${Math.round(Number(activePrediction.confidence || 0) * 100)}% confidence`;
+      `${Math.round(Number(activePrediction.confidence || 0) * 100)}% ` +
+      `${activePrediction.probabilityLabel || "confidence"}`;
     document.getElementById("rationale").textContent = activePrediction.rationale;
 
     const sources = document.getElementById("sources");
@@ -1647,7 +1784,7 @@
           target: [0, -0.4, 0],
           distance: [6, 36],
           chainY: 6.4,
-          legend: `Layout: Monte Carlo scenario cloud. 520 seeded draws shock CPI, labor, curve and carry-over by their observed volatility; x = resulting bias, z = CPI shock, y = labor shock. ${BIAS_SCALE_BAR} colour = sampled decision. Bars = outcome frequency.`,
+          legend: `Layout: Monte Carlo scenario cloud. 520 seeded draws shock markets, all eight macro domains, and carry-over around the shared all-data ensemble; x = resulting bias, z = CPI shock, y = labor shock. ${BIAS_SCALE_BAR} colour = sampled decision. Bars = outcome frequency.`,
         },
         "experiment-8": {
           camera: [0, 2.4, 15.5],
@@ -1896,13 +2033,7 @@
       }
 
       function probabilitiesFromBias(bias, confidence) {
-        const temperature = 1.6 + 2.4 * clamp(confidence, 0, 1);
-        const utilities = { raise: bias, hold: 0.45, cut: -bias };
-        const weights = Object.fromEntries(
-          Object.entries(utilities).map(([key, value]) => [key, Math.exp(value * temperature)]),
-        );
-        const total = weights.raise + weights.hold + weights.cut;
-        return { raise: weights.raise / total, hold: weights.hold / total, cut: weights.cut / total };
+        return window.__WTF_DECISION_MODEL__.probabilitiesFromBias(bias, confidence);
       }
 
       function historicalMeetings() {
@@ -2963,24 +3094,12 @@
       // Direct inflation and labor readings dominate. Fiscal impulse and funding
       // conditions remain deliberately small because they affect the decision less
       // directly than observed prices, employment, and inflation expectations.
-      const MACRO_WEIGHTS = {
-        cpi: 0.24, ppi: 0.12, labor: 0.21, gdp: 0.12,
-        breakeven: 0.14, treasury: 0.08, policyRate: 0.05, fiscal: 0.04,
-      };
+      const MACRO_WEIGHTS = window.__WTF_DECISION_MODEL__.macroWeights;
 
       function blendMacro({ cpi, ppi, labor, gdp, breakeven, treasury, policyRate, fiscal }) {
-        return clamp(
-          MACRO_WEIGHTS.cpi * cpi
-          + MACRO_WEIGHTS.ppi * ppi
-          + MACRO_WEIGHTS.labor * labor
-          + MACRO_WEIGHTS.gdp * gdp
-          + MACRO_WEIGHTS.breakeven * breakeven
-          + MACRO_WEIGHTS.treasury * treasury
-          + MACRO_WEIGHTS.policyRate * policyRate
-          + MACRO_WEIGHTS.fiscal * fiscal,
-          -1,
-          1,
-        );
+        return window.__WTF_DECISION_MODEL__.blendMacro({
+          cpi, ppi, labor, gdp, breakeven, treasury, policyRate, fiscal,
+        });
       }
 
       function biasModel(context, overrides = {}) {
@@ -2992,13 +3111,17 @@
         const breakeven = overrides.breakeven ?? (context.breakevenBias || 0);
         const policyRate = overrides.policyRate ?? (context.policyRateBias || 0);
         const fiscal = overrides.fiscal ?? (context.fiscalBias || 0);
+        const market = overrides.market ?? context.marketBias;
         const previous = overrides.previous ?? context.previousBias;
         const carry = clamp(overrides.carry ?? (context.carryFromPrevious || 0.4), 0, 1);
-        const macro = blendMacro({ cpi, ppi, labor, gdp, breakeven, treasury, policyRate, fiscal });
-        const bias = clamp(previous * carry + macro * (1 - carry), -1, 1);
-        const probabilities = probabilitiesFromBias(bias, context.focus?.confidence ?? 0.45);
-        const decision = Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0][0];
-        return { bias, macro, probabilities, decision };
+        const result = window.__WTF_DECISION_MODEL__.evaluate({
+          marketBias: market,
+          previousBias: previous,
+          carry,
+          macroInputs: { cpi, ppi, labor, gdp, breakeven, treasury, policyRate, fiscal },
+          confidence: context.focus?.confidence ?? 0.45,
+        });
+        return { ...result, macro: result.macroBias };
       }
 
       function buildGraphExperiment6(scene, context) {
@@ -3190,6 +3313,18 @@
         const policyRateHistory = (window.__POLICY_RATE_DASHBOARD_DATA__ || {}).bias_history;
         const fiscalHistory = (window.__FISCAL_DASHBOARD_DATA__ || {}).bias_history;
         const gdpHistory = (window.__GDP_DASHBOARD_DATA__ || {}).bias_history;
+        const providerBiases = Object.values((window.__MARKET_DASHBOARD_DATA__ || {}).providers || {})
+          .map((provider) => {
+            const probabilities = provider?.probabilities || {};
+            return Number(probabilities.raise || 0) - Number(probabilities.cut || 0);
+          })
+          .filter(Number.isFinite);
+        const providerMean = providerBiases.length
+          ? providerBiases.reduce((sum, value) => sum + value, 0) / providerBiases.length
+          : 0;
+        const providerVariance = providerBiases.length > 1
+          ? providerBiases.reduce((sum, value) => sum + (value - providerMean) ** 2, 0) / providerBiases.length
+          : 0.08 ** 2;
         // Monthly series step once per print; daily series are compared across the
         // ~30 trading days that typically separate FOMC-relevant releases.
         const dailyLag = 30;
@@ -3202,6 +3337,7 @@
           policyRate: biasHistorySigma(policyRateHistory, 0.05, dailyLag),
           fiscal: biasHistorySigma(fiscalHistory, 0.12),
           gdp: biasHistorySigma(gdpHistory, 0.18),
+          market: clamp(Math.sqrt(providerVariance), 0.03, 0.35),
           observations: {
             cpi: Array.isArray(cpiHistory) ? cpiHistory.length : 0,
             ppi: Array.isArray(ppiHistory) ? ppiHistory.length : 0,
@@ -3225,6 +3361,7 @@
         const sigmaPolicyRate = sigmas.policyRate;
         const sigmaFiscal = sigmas.fiscal;
         const sigmaGdp = sigmas.gdp;
+        const sigmaMarket = sigmas.market;
         const sigmaCarry = clamp(0.5 * (1 - (context.carryFromPrevious || 0.4)), 0.05, 0.3);
 
         const baseline = biasModel(context);
@@ -3243,6 +3380,7 @@
           const policyRateShock = gaussian(random) * sigmaPolicyRate;
           const fiscalShock = gaussian(random) * sigmaFiscal;
           const gdpShock = gaussian(random) * sigmaGdp;
+          const marketShock = gaussian(random) * sigmaMarket;
           const carryShock = gaussian(random) * sigmaCarry;
           const sample = biasModel(context, {
             cpi: clamp(context.cpiBias + cpiShock, -1, 1),
@@ -3253,6 +3391,7 @@
             policyRate: clamp((context.policyRateBias || 0) + policyRateShock, -1, 1),
             fiscal: clamp((context.fiscalBias || 0) + fiscalShock, -1, 1),
             gdp: clamp((context.gdpBias || 0) + gdpShock, -1, 1),
+            market: clamp(context.marketBias + marketShock, -1, 1),
             carry: clamp((context.carryFromPrevious || 0.4) + carryShock, 0, 1),
           });
           biasSum += sample.bias;
@@ -3335,7 +3474,8 @@
             `y = labor shock (σ ${sigmaLabor.toFixed(3)} over ${sigmas.observations.labor} prints), ` +
             `PPI σ ${sigmaPpi.toFixed(3)} · curve σ ${sigmaTreasury.toFixed(3)} · ` +
             `GDP σ ${sigmaGdp.toFixed(3)} · breakeven σ ${sigmaBreakeven.toFixed(3)} · ` +
-            `funding σ ${sigmaPolicyRate.toFixed(3)} · fiscal σ ${sigmaFiscal.toFixed(3)}`,
+            `funding σ ${sigmaPolicyRate.toFixed(3)} · fiscal σ ${sigmaFiscal.toFixed(3)} · ` +
+            `market disagreement σ ${sigmaMarket.toFixed(3)}`,
         );
         addReferenceGrid(scene);
       }
@@ -3345,6 +3485,7 @@
         const step = 0.05;
 
         const inputs = [
+          { key: "market", label: "Market Net Bias", base: context.marketBias, color: 0x79c0ff, min: -1, max: 1 },
           { key: "cpi", label: "CPI Bias", base: context.cpiBias, color: 0xff7b72, min: -1, max: 1 },
           { key: "ppi", label: "PPI Bias", base: context.ppiBias || 0, color: 0xf97583, min: -1, max: 1 },
           { key: "labor", label: "Labor Bias", base: context.laborBias, color: 0x7bd389, min: -1, max: 1 },

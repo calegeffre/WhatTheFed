@@ -12,6 +12,25 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 - **NY Fed**: overnight reference rates (EFFR, SOFR, OBFR, BGCR, TGCR) and the published FOMC target band
 - **Kalshi + Polymarket**: market odds for upcoming FOMC outcomes
 
+## Prediction model
+
+The headline prediction uses the same all-data ensemble as the Monte Carlo and
+sensitivity experiments:
+
+```text
+macro bias  = 24% CPI + 12% PPI + 21% labor + 12% GDP
+              + 14% breakevens + 8% Treasury curve
+              + 5% policy rates + 4% fiscal impulse
+policy bias = carry-over × prior FOMC bias + (1 - carry-over) × macro bias
+final bias  = 45% market bias + 55% policy bias
+market bias = P(raise) - P(cut)
+```
+
+Every input is normalized to a `-1` (dovish/cut) to `+1` (hawkish/raise) scale.
+The final bias is converted to raise/hold/cut probabilities with a softmax that
+preserves a neutral preference for holding. Experiment 7 applies empirical
+shocks to this baseline over 520 deterministic Monte Carlo draws.
+
 ## Refresh schedule
 
 GitHub Actions is the primary ingestion and deployment path. The
