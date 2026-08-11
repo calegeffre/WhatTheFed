@@ -470,6 +470,77 @@
       color: var(--muted);
       font-size: 13px;
     }
+    .experiment-details-intro {
+      padding: 18px;
+      margin-bottom: 14px;
+      background: rgba(141, 200, 255, 0.06);
+      border: 1px solid rgba(141, 200, 255, 0.16);
+      border-radius: 12px;
+    }
+    .experiment-details-intro h3,
+    .experiment-details-card h3,
+    .experiment-details-card h4 {
+      margin-top: 0;
+    }
+    .experiment-details-intro p:last-child,
+    .experiment-details-card p:last-child,
+    .experiment-details-card ul:last-child {
+      margin-bottom: 0;
+    }
+    .experiment-details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .experiment-details-card {
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(141, 200, 255, 0.12);
+      border-radius: 12px;
+    }
+    .experiment-details-card h3 {
+      margin-bottom: 6px;
+      color: #8dc8ff;
+      font-size: 18px;
+    }
+    .experiment-details-card h4 {
+      margin-bottom: 4px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .experiment-details-card p,
+    .experiment-details-card li {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .experiment-details-card ul {
+      margin: 6px 0 14px;
+      padding-left: 20px;
+    }
+    .experiment-number {
+      display: inline-block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .experiment-open {
+      padding: 6px 12px;
+      border: 1px solid rgba(141, 200, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(141, 200, 255, 0.09);
+      color: #8dc8ff;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .experiment-open:hover {
+      background: rgba(141, 200, 255, 0.18);
+    }
     .kg-tabs {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -478,6 +549,8 @@
     }
     @media (max-width: 760px) {
       .kg-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .experiment-details-grid { grid-template-columns: 1fr; }
+      .viz-tabs { flex-wrap: wrap; }
     }
     .kg-tab {
       padding: 6px 12px;
@@ -542,6 +615,7 @@
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
         <button class="viz-tab" data-viz="knowledge-graph">Signal Knowledge Graph</button>
         <button class="viz-tab" data-viz="raw-data">Raw Data</button>
+        <button class="viz-tab" data-viz="experiment-details">Experiment Details</button>
       </div>
       <div id="viz-panel-rate-timeline" class="viz-panel viz-panel-active">
         <svg id="rate-chart" class="viz-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet"></svg>
@@ -561,6 +635,134 @@
       </div>
       <div id="viz-panel-raw-data" class="viz-panel">
         <div id="raw-data-wrap" class="raw-data-wrap"></div>
+      </div>
+      <div id="viz-panel-experiment-details" class="viz-panel">
+        <div class="experiment-details-intro">
+          <h3>Eight views of the same evidence</h3>
+          <p class="note">
+            These are not eight competing forecasts. They are eight ways to inspect the same FOMC,
+            market, inflation, labor, growth, Treasury, funding, and fiscal inputs. A bias of
+            <strong>-1</strong> means pressure toward a cut, <strong>0</strong> means hold,
+            and <strong>+1</strong> means pressure toward a raise.
+          </p>
+          <p class="note">
+            The shared headline model combines 45% market bias with 55% policy-model bias.
+            The policy model blends prior-meeting carry-over with the weighted macro signals.
+          </p>
+        </div>
+        <div class="experiment-details-grid">
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 1</span>
+            <h3>Bias Gradient</h3>
+            <h4>ELI5: Put every clue on the same ruler.</h4>
+            <p>Each source gets translated onto the cut-to-raise scale so unlike data can be compared side by side.</p>
+            <ul>
+              <li><strong>Left/right:</strong> cut pressure to raise pressure.</li>
+              <li><strong>Size:</strong> relevance plus how far the signal is from neutral.</li>
+              <li><strong>Use it for:</strong> seeing which clues agree, conflict, or sit near hold.</li>
+              <li><strong>Watch out:</strong> bias is direction and strength, not an outcome probability.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-1">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 2</span>
+            <h3>Source Clusters</h3>
+            <h4>ELI5: Sort the clues into labeled baskets.</h4>
+            <p>FOMC text, markets, CPI, labor, Treasury data, and other domains each form a cluster around the meeting.</p>
+            <ul>
+              <li><strong>Center node:</strong> the focused FOMC meeting.</li>
+              <li><strong>Large outer nodes:</strong> data domains; small nodes are their component series.</li>
+              <li><strong>Use it for:</strong> learning what raw observations make up each domain bias.</li>
+              <li><strong>Watch out:</strong> where a basket sits around the ring is layout, not rank.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-2">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 3</span>
+            <h3>Timeline Lanes</h3>
+            <h4>ELI5: Lay every data series on a calendar.</h4>
+            <p>The most recent observations run left to right in separate GDP, CPI, PPI, labor, Treasury, breakeven, money-market, and fiscal lanes.</p>
+            <ul>
+              <li><strong>Left/right:</strong> older to newer observations.</li>
+              <li><strong>Depth:</strong> a series' value normalized within its own recent range.</li>
+              <li><strong>Size:</strong> how large the latest local change was.</li>
+              <li><strong>Watch out:</strong> depth compares a series with itself, not dollars with percentages.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-3">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 4</span>
+            <h3>Contribution Sunburst</h3>
+            <h4>ELI5: Turn the evidence into slices of a pie.</h4>
+            <p>The inner ring groups evidence by domain and the outer ring breaks each domain into categories or series.</p>
+            <ul>
+              <li><strong>Arc length:</strong> exploratory importance allocated to that chunk.</li>
+              <li><strong>Color:</strong> whether the chunk leans cut, hold, or raise.</li>
+              <li><strong>Use it for:</strong> spotting domains represented by many important components.</li>
+              <li><strong>Watch out:</strong> these display shares are not the headline model's fixed macro weights.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-4">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 5</span>
+            <h3>Correlation Web</h3>
+            <h4>ELI5: Draw a string between clues that often move together.</h4>
+            <p>The 16 most volatile eligible series are linked when their recent percentage changes have a Pearson correlation of at least 0.55 in either direction.</p>
+            <ul>
+              <li><strong>Red link:</strong> the two series tend to move together.</li>
+              <li><strong>Blue link:</strong> one tends to rise when the other falls.</li>
+              <li><strong>Size:</strong> recent volatility; color shows recent trend.</li>
+              <li><strong>Watch out:</strong> correlation is not causation, and short histories can be noisy.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-5">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 6</span>
+            <h3>Decision Funnel</h3>
+            <h4>ELI5: Follow each clue through the machine to the three doors.</h4>
+            <p>Raw series flow into domains, and each domain splits toward raise, hold, or cut according to its normalized bias.</p>
+            <ul>
+              <li><strong>Flow thickness:</strong> source relevance multiplied by its directional share.</li>
+              <li><strong>Outcome size:</strong> probabilities from the shared all-data model.</li>
+              <li><strong>Use it for:</strong> tracing how evidence is compressed into a decision.</li>
+              <li><strong>Watch out:</strong> flows explain the model; they do not prove the Fed uses this formula.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-6">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 7</span>
+            <h3>Monte Carlo Cloud</h3>
+            <h4>ELI5: Replay the meeting 520 times with plausible surprises.</h4>
+            <p>Each replay nudges markets, all eight macro domains, and carry-over using variability measured from their historical bias changes.</p>
+            <ul>
+              <li><strong>Each dot:</strong> one shocked scenario and one sampled decision.</li>
+              <li><strong>Bars:</strong> the share of scenarios ending in raise, hold, or cut.</li>
+              <li><strong>Same seed:</strong> the random sequence is repeatable so changes come from data.</li>
+              <li><strong>Watch out:</strong> historical volatility and normal shocks cannot capture every crisis or structural break.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-7">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 8</span>
+            <h3>Sensitivity Tornado</h3>
+            <h4>ELI5: Turn one knob at a time and see how much the answer moves.</h4>
+            <p>Each input is moved up and down by 0.25 bias units while every other input stays fixed.</p>
+            <ul>
+              <li><strong>Bar length:</strong> change in final meeting bias from that one input.</li>
+              <li><strong>Order:</strong> most influential input first.</li>
+              <li><strong>Flip marker:</strong> how far the input must move to change the modal decision.</li>
+              <li><strong>Watch out:</strong> real indicators can move together; one-at-a-time tests omit those interactions.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-8">Open this experiment</button>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -1735,6 +1937,12 @@
           }
         });
       });
+      document.querySelectorAll(".experiment-open").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.querySelector('.viz-tab[data-viz="knowledge-graph"]')?.click();
+          document.querySelector(`.kg-tab[data-kg-exp="${button.dataset.openExperiment}"]`)?.click();
+        });
+      });
     }
 
     function initVizTabs() {
@@ -1789,7 +1997,7 @@
           target: [0, 1.0, 0],
           distance: [6, 36],
           chainY: 6.2,
-          legend: "Layout: three time lanes (CPI / Labor / Treasury). x = time, z = normalised value, size = month-over-month move. The blue marker is the focused meeting date.",
+          legend: "Layout: eight time lanes (GDP / CPI / PPI / Labor / Treasury / Breakeven / Money Market / Fiscal). x = time, z = value normalised within each series, size = local change. The blue marker is the focused meeting date.",
         },
         "experiment-4": {
           camera: [0, 7.6, 17.5],
@@ -2679,12 +2887,16 @@
         groups.forEach((groupPoints) => groupPoints.sort((a, b) => a.timestamp - b.timestamp));
 
         [
-          { label: "CPI lane", y: 2.2, color: 0xff7b72 },
-          { label: "Labor lane", y: 0.0, color: 0x7bd389 },
-          { label: "Treasury lane", y: -2.2, color: 0xf2cc60 },
+          { label: "GDP lane", y: 8.8, color: 0x56d4dd },
+          { label: "CPI lane", y: 6.6, color: 0xff7b72 },
+          { label: "PPI lane", y: 4.4, color: 0xf97583 },
+          { label: "Labor lane", y: 2.2, color: 0x7bd389 },
+          { label: "Treasury lane", y: 0.0, color: 0xf2cc60 },
+          { label: "Breakeven lane", y: -2.2, color: 0xffa657 },
+          { label: "Money Market lane", y: -4.4, color: 0xd2a8ff },
+          { label: "Fiscal lane", y: -6.6, color: 0xff9f43 },
         ].forEach((lane) => {
           makeNode(scene, -6.6, lane.y, 0, lane.color, 0.14, lane.label, "");
-          addEdge(scene, [0, 4.0, 0], [-6.6, lane.y, 0], lane.color, 0.16);
           addEdge(scene, [-5.9, lane.y, 0], [5.9, lane.y, 0], lane.color, 0.13);
         });
 
@@ -3158,6 +3370,7 @@
       }
 
       function buildGraphExperiment6(scene, context) {
+        const baseline = biasModel(context);
         const sourceX = -6.4;
         const domainX = -1.2;
         const outcomeX = 5.2;
@@ -3249,9 +3462,9 @@
         ].filter((domain) => domain.sources.length);
 
         const outcomes = [
-          { key: "raise", label: "RAISE", bias: 1, prob: context.marketRaise, y: 2.6 },
-          { key: "hold", label: "HOLD", bias: 0, prob: context.marketHold, y: 0.0 },
-          { key: "cut", label: "CUT", bias: -1, prob: context.marketCut, y: -2.6 },
+          { key: "raise", label: "RAISE", bias: 1, prob: baseline.probabilities.raise, y: 2.6 },
+          { key: "hold", label: "HOLD", bias: 0, prob: baseline.probabilities.hold, y: 0.0 },
+          { key: "cut", label: "CUT", bias: -1, prob: baseline.probabilities.cut, y: -2.6 },
         ];
         outcomes.forEach((outcome) => {
           makeNode(
