@@ -50,6 +50,10 @@ The PowerShell ingestion scripts remain available for manually refreshing the
 local database. Windows Task Scheduler registration scripts are optional and
 are not required for the hosted dashboard.
 
+Hosted ingestion retries a failed source up to three times for transient
+provider errors. If all attempts fail, deployment stops rather than publishing
+stale or substitute data.
+
 ## Storage and outputs
 
 - Data is stored in **SQLite** at `data/market_snapshots.db` (statements, macro observations, market snapshots, and derived records).

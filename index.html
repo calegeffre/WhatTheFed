@@ -764,6 +764,16 @@
     window.__WTF_DECISION_MODEL__ = decisionModel;
 
     const formatPct = (value) => `${Math.round((value || 0) * 100)}%`;
+    const formatMeetingDate = (value) => {
+      const parsed = new Date(`${value}T00:00:00Z`);
+      if (!value || Number.isNaN(parsed.getTime())) return "?";
+      return parsed.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+    };
     const scoreFromProbability = (value) => Math.max(1, Math.min(5, Math.round((value || 0) * 5)));
     const toneFromScore = (score) => {
       if (score >= 5) return "hot";
@@ -856,7 +866,7 @@
         ...result,
         probabilityLabel: "model probability",
         rationale:
-          `All-data ensemble (${marketOverlay.target_meeting}): ` +
+          `All-data ensemble for the ${formatMeetingDate(marketOverlay.target_meeting)} FOMC meeting: ` +
           `R ${formatPct(result.probabilities.raise)}, H ${formatPct(result.probabilities.hold)}, ` +
           `C ${formatPct(result.probabilities.cut)}. ` +
           `Net bias ${result.bias >= 0 ? "+" : ""}${result.bias.toFixed(2)} = ` +

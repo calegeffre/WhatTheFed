@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -27,6 +28,32 @@ EXPECTED_PAYLOADS = (
     "fiscal_dashboard_data.js",
     "gdp_dashboard_data.js",
 )
+MAX_COMMAND_ATTEMPTS = 3
+RETRY_DELAYS_SECONDS = (10, 30)
+
+
+def run_ingestion_command(
+    *,
+    label: str,
+    module: str,
+    arguments: list[str],
+    max_attempts: int = MAX_COMMAND_ATTEMPTS,
+) -> None:
+    command = [sys.executable, "-m", module, *arguments]
+    for attempt in range(1, max_attempts + 1):
+        try:
+            subprocess.run(command, cwd=REPO_ROOT, check=True)
+            return
+        except subprocess.CalledProcessError:
+            if attempt == max_attempts:
+                raise
+            delay = RETRY_DELAYS_SECONDS[min(attempt - 1, len(RETRY_DELAYS_SECONDS) - 1)]
+            print(
+                f"::warning::{label} attempt {attempt}/{max_attempts} failed; "
+                f"retrying in {delay} seconds.",
+                flush=True,
+            )
+            time.sleep(delay)
 
 
 def build_site(*, output_dir: Path) -> None:
@@ -150,11 +177,7 @@ def build_site(*, output_dir: Path) -> None:
         ]
         for label, module, arguments in commands:
             print(f"::group::{label}", flush=True)
-            subprocess.run(
-                [sys.executable, "-m", module, *arguments],
-                cwd=REPO_ROOT,
-                check=True,
-            )
+            run_ingestion_command(label=label, module=module, arguments=arguments)
             print("::endgroup::", flush=True)
 
     missing = [
