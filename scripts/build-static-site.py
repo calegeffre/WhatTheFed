@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from datetime import date, timedelta
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from whatthefed.prediction_history import (
+    build_prediction_snapshot,
+    export_history_js,
+    load_dashboard_payloads,
+    merge_history,
+)
+
 EXPECTED_PAYLOADS = (
     "fomc_dashboard_data.js",
     "fomc_history_data.js",
@@ -27,6 +39,7 @@ EXPECTED_PAYLOADS = (
     "ppi_dashboard_data.js",
     "fiscal_dashboard_data.js",
     "gdp_dashboard_data.js",
+    "model_probability_history_data.js",
 )
 MAX_COMMAND_ATTEMPTS = 3
 RETRY_DELAYS_SECONDS = (10, 30)
@@ -56,7 +69,28 @@ def run_ingestion_command(
             time.sleep(delay)
 
 
-def build_site(*, output_dir: Path) -> None:
+def fetch_existing_history(source_url: str | None) -> dict[str, object]:
+    if not source_url:
+        return {"snapshots": []}
+    request = Request(source_url, headers={"User-Agent": "WhatTheFed/1.0"})
+    try:
+        with urlopen(request, timeout=20) as response:
+            text = response.read().decode("utf-8").strip()
+    except HTTPError as error:
+        if error.code == 404:
+            return {"snapshots": []}
+        raise
+
+    prefix = "window.__MODEL_PROBABILITY_HISTORY_DATA__ = "
+    if not text.startswith(prefix) or not text.endswith(";"):
+        raise RuntimeError("Deployed model probability history has an invalid format.")
+    payload = json.loads(text[len(prefix) : -1])
+    if not isinstance(payload, dict) or not isinstance(payload.get("snapshots"), list):
+        raise RuntimeError("Deployed model probability history has an invalid payload.")
+    return payload
+
+
+def build_site(*, output_dir: Path, history_source_url: str | None = None) -> None:
     output_dir = output_dir.resolve()
     if REPO_ROOT not in output_dir.parents:
         raise ValueError(f"Output directory must be inside the repository: {output_dir}")
@@ -67,6 +101,7 @@ def build_site(*, output_dir: Path) -> None:
         "tests",
     }:
         raise ValueError(f"Refusing to replace protected repository path: {output_dir}")
+    existing_history = fetch_existing_history(history_source_url)
     if output_dir.exists():
         shutil.rmtree(output_dir)
     data_dir = output_dir / "data"
@@ -180,6 +215,10 @@ def build_site(*, output_dir: Path) -> None:
             run_ingestion_command(label=label, module=module, arguments=arguments)
             print("::endgroup::", flush=True)
 
+    snapshot = build_prediction_snapshot(load_dashboard_payloads(data_dir))
+    history = merge_history(existing_history, snapshot)
+    export_history_js(history, data_dir / "model_probability_history_data.js")
+
     missing = [
         name
         for name in EXPECTED_PAYLOADS
@@ -208,8 +247,12 @@ def build_site(*, output_dir: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="_site", type=Path)
+    parser.add_argument(
+        "--history-source-url",
+        help="Previously deployed model history to extend. A missing file starts a new archive.",
+    )
     args = parser.parse_args(argv)
-    build_site(output_dir=args.output_dir)
+    build_site(output_dir=args.output_dir, history_source_url=args.history_source_url)
     return 0
 
 

@@ -37,7 +37,10 @@ jobs:
           python-version: "3.12"
 
       - name: Build static dashboard
-        run: python scripts/build-static-site.py --output-dir _site
+        run: >-
+          python scripts/build-static-site.py
+          --output-dir _site
+          --history-source-url https://calegeffre.github.io/WhatTheFed/data/model_probability_history_data.js
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

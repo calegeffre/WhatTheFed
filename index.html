@@ -432,6 +432,45 @@
       border: 1px solid rgba(141, 200, 255, 0.1);
       border-radius: 12px;
     }
+    .model-history-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      background: rgba(141, 200, 255, 0.05);
+      border: 1px solid rgba(141, 200, 255, 0.12);
+      border-radius: 12px;
+    }
+    .model-history-header h3 {
+      margin-bottom: 6px;
+      color: #8dc8ff;
+    }
+    .model-history-picker {
+      display: grid;
+      gap: 5px;
+      min-width: 190px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .model-history-picker select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid rgba(141, 200, 255, 0.25);
+      border-radius: 8px;
+      background: #101c2e;
+      color: var(--text);
+      font: inherit;
+    }
+    .model-history-empty {
+      padding: 28px;
+      color: var(--muted);
+      text-align: center;
+      background: rgba(255, 107, 107, 0.06);
+      border: 1px solid rgba(255, 107, 107, 0.24);
+      border-radius: 12px;
+    }
     .raw-data-wrap {
       padding: 16px;
       background: rgba(255, 255, 255, 0.02);
@@ -551,6 +590,8 @@
       .kg-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .experiment-details-grid { grid-template-columns: 1fr; }
       .viz-tabs { flex-wrap: wrap; }
+      .model-history-header { display: grid; }
+      .model-history-picker { min-width: 0; }
     }
     .kg-tab {
       padding: 6px 12px;
@@ -613,12 +654,36 @@
       <div class="eyebrow">Data Visualization</div>
       <div class="viz-tabs">
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
+        <button class="viz-tab" data-viz="model-history">Model Probability History</button>
         <button class="viz-tab" data-viz="knowledge-graph">Signal Knowledge Graph</button>
         <button class="viz-tab" data-viz="raw-data">Raw Data</button>
         <button class="viz-tab" data-viz="experiment-details">Experiment Details</button>
       </div>
       <div id="viz-panel-rate-timeline" class="viz-panel viz-panel-active">
         <svg id="rate-chart" class="viz-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div id="viz-panel-model-history" class="viz-panel">
+        <div class="model-history-header">
+          <div>
+            <h3>How the forecast changes before each decision</h3>
+            <p id="model-history-summary" class="note">
+              Each point is the complete all-data model from a successful dashboard refresh.
+            </p>
+          </div>
+          <label class="model-history-picker">
+            FOMC meeting
+            <select id="model-history-meeting" aria-label="Choose an FOMC meeting"></select>
+          </label>
+        </div>
+        <svg
+          id="model-history-chart"
+          class="viz-chart"
+          viewBox="0 0 800 320"
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label="Raise, hold, and cut model probabilities over time"
+        ></svg>
+        <div id="model-history-empty" class="model-history-empty" hidden></div>
       </div>
       <div id="viz-panel-knowledge-graph" class="viz-panel">
         <div class="kg-tabs">
@@ -788,6 +853,7 @@
     window.__PPI_DASHBOARD_DATA__ = window.__PPI_DASHBOARD_DATA__ || null;
     window.__FISCAL_DASHBOARD_DATA__ = window.__FISCAL_DASHBOARD_DATA__ || null;
     window.__GDP_DASHBOARD_DATA__ = window.__GDP_DASHBOARD_DATA__ || null;
+    window.__MODEL_PROBABILITY_HISTORY_DATA__ = window.__MODEL_PROBABILITY_HISTORY_DATA__ || null;
     window.__KG_EXPERIMENT__ = window.__KG_EXPERIMENT__ || "experiment-1";
     window.__KG_MEETING_OFFSET__ = window.__KG_MEETING_OFFSET__ || 0;
   </script>
@@ -804,6 +870,7 @@
   <script src="data/ppi_dashboard_data.js"></script>
   <script src="data/fiscal_dashboard_data.js"></script>
   <script src="data/gdp_dashboard_data.js"></script>
+  <script src="data/model_probability_history_data.js"></script>
   <script>
     const dashboardData = {
       meeting_history: [
@@ -891,6 +958,7 @@
     const ppiOverlay = window.__PPI_DASHBOARD_DATA__;
     const fiscalOverlay = window.__FISCAL_DASHBOARD_DATA__;
     const gdpOverlay = window.__GDP_DASHBOARD_DATA__;
+    const modelHistoryOverlay = window.__MODEL_PROBABILITY_HISTORY_DATA__;
     const normalizeTriplet = (values) => {
       const parsed = {
         raise: Number(values?.raise || 0),
@@ -1518,6 +1586,166 @@
       svg.appendChild(svgEl("text", { x: -(P.t + CH / 2), y: 13, transform: "rotate(-90)", "text-anchor": "middle", fill: "rgba(200,210,225,0.35)", "font-size": 10 }, "Fed Funds Rate"));
     }
 
+    function drawModelProbabilityHistory() {
+      const svg = document.getElementById("model-history-chart");
+      const empty = document.getElementById("model-history-empty");
+      const picker = document.getElementById("model-history-meeting");
+      const summary = document.getElementById("model-history-summary");
+      if (!svg || !empty || !picker || !summary) return;
+
+      const snapshots = Array.isArray(modelHistoryOverlay?.snapshots)
+        ? modelHistoryOverlay.snapshots.filter((snapshot) => {
+            const probabilities = snapshot?.probabilities;
+            return snapshot?.target_meeting
+              && snapshot?.captured_at
+              && ["raise", "hold", "cut"].every((key) => Number.isFinite(Number(probabilities?.[key])));
+          })
+        : [];
+      const meetings = [...new Set(snapshots.map((snapshot) => snapshot.target_meeting))]
+        .sort((a, b) => b.localeCompare(a));
+
+      if (!meetings.length) {
+        svg.hidden = true;
+        picker.innerHTML = "";
+        picker.disabled = true;
+        empty.hidden = false;
+        empty.textContent = "No model probability snapshots are available yet. History begins after the next successful hosted refresh.";
+        summary.textContent = "Model history is unavailable; no substitute values are shown.";
+        return;
+      }
+
+      const priorSelection = picker.value;
+      picker.innerHTML = meetings
+        .map((meeting) => `<option value="${escHtml(meeting)}">${escHtml(formatMeetingDate(meeting))}</option>`)
+        .join("");
+      picker.value = meetings.includes(priorSelection) ? priorSelection : meetings[0];
+      picker.disabled = false;
+
+      const selectedMeeting = picker.value;
+      const points = snapshots
+        .filter((snapshot) => snapshot.target_meeting === selectedMeeting)
+        .sort((a, b) => Date.parse(a.captured_at) - Date.parse(b.captured_at));
+      if (!points.length) return;
+
+      svg.hidden = false;
+      empty.hidden = true;
+      svg.innerHTML = "";
+
+      const first = points[0];
+      const latest = points.at(-1);
+      const latestProbabilities = latest.probabilities;
+      const capturedLabel = new Date(latest.captured_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const changeText = points.length > 1
+        ? ["raise", "hold", "cut"]
+            .map((key) => {
+              const change = Math.round((Number(latestProbabilities[key]) - Number(first.probabilities[key])) * 100);
+              return `${key[0].toUpperCase()} ${change >= 0 ? "+" : ""}${change} pts`;
+            })
+            .join(", ")
+        : "tracking begins with this snapshot";
+      summary.textContent =
+        `${capturedLabel}: Raise ${formatPct(latestProbabilities.raise)}, ` +
+        `Hold ${formatPct(latestProbabilities.hold)}, Cut ${formatPct(latestProbabilities.cut)}; ${changeText}.`;
+
+      const VW = 800, VH = 320;
+      const P = { t: 28, r: 28, b: 62, l: 58 };
+      const CW = VW - P.l - P.r, CH = VH - P.t - P.b;
+      const day = 86400000;
+      const firstTime = Date.parse(first.captured_at);
+      const latestTime = Date.parse(latest.captured_at);
+      const meetingTime = Date.parse(`${selectedMeeting}T00:00:00Z`);
+      const minTime = firstTime;
+      const maxTime = Math.max(meetingTime, latestTime, minTime + day);
+      const xS = (value) => P.l + ((Date.parse(value) - minTime) / (maxTime - minTime)) * CW;
+      const yS = (value) => P.t + (1 - Number(value)) * CH;
+
+      [0, 0.25, 0.5, 0.75, 1].forEach((probability) => {
+        svg.appendChild(svgEl("line", {
+          x1: P.l, y1: yS(probability), x2: P.l + CW, y2: yS(probability),
+          stroke: "rgba(141,200,255,0.09)", "stroke-width": 1,
+        }));
+        svg.appendChild(svgEl("text", {
+          x: P.l - 8, y: yS(probability) + 4, "text-anchor": "end",
+          fill: "rgba(200,210,225,0.5)", "font-size": 10,
+        }, `${Math.round(probability * 100)}%`));
+      });
+
+      const meetingX = P.l + ((meetingTime - minTime) / (maxTime - minTime)) * CW;
+      if (meetingX >= P.l && meetingX <= P.l + CW) {
+        svg.appendChild(svgEl("line", {
+          x1: meetingX, y1: P.t, x2: meetingX, y2: P.t + CH,
+          stroke: "rgba(238,244,255,0.35)", "stroke-width": 1, "stroke-dasharray": "5 4",
+        }));
+        svg.appendChild(svgEl("text", {
+          x: meetingX - 4, y: P.t + 12, "text-anchor": "end",
+          fill: "rgba(238,244,255,0.55)", "font-size": 10,
+        }, "Decision"));
+      }
+
+      const series = [
+        ["raise", "#ff7b72", "Raise"],
+        ["hold", "#f7b267", "Hold"],
+        ["cut", "#58a6ff", "Cut"],
+      ];
+      series.forEach(([key, color, label]) => {
+        const path = points
+          .map((point, index) => `${index ? "L" : "M"} ${xS(point.captured_at)},${yS(point.probabilities[key])}`)
+          .join(" ");
+        svg.appendChild(svgEl("path", {
+          d: path, fill: "none", stroke: color, "stroke-width": 2.5,
+          "stroke-linejoin": "round", "stroke-linecap": "round",
+        }));
+        points.forEach((point) => {
+          const circle = svgEl("circle", {
+            cx: xS(point.captured_at), cy: yS(point.probabilities[key]), r: 4,
+            fill: color, stroke: "#08111f", "stroke-width": 1.5,
+          });
+          const timestamp = new Date(point.captured_at).toLocaleString("en-US", {
+            month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+          });
+          circle.appendChild(svgEl("title", {}, `${timestamp}: ${label} ${formatPct(point.probabilities[key])}`));
+          svg.appendChild(circle);
+        });
+      });
+
+      const dateLabels = [
+        [firstTime, new Date(firstTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })],
+        [latestTime, new Date(latestTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })],
+        [meetingTime, new Date(meetingTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })],
+      ].filter(([time], index, values) => values.findIndex(([candidate]) => Math.abs(candidate - time) < day) === index);
+      dateLabels.forEach(([time, label]) => {
+        const x = P.l + ((time - minTime) / (maxTime - minTime)) * CW;
+        svg.appendChild(svgEl("text", {
+          x, y: P.t + CH + 20, "text-anchor": time === firstTime ? "start" : time === meetingTime ? "end" : "middle",
+          fill: "rgba(200,210,225,0.5)", "font-size": 10,
+        }, label));
+      });
+
+      series.forEach(([, color, label], index) => {
+        const legendX = P.l + index * 84;
+        const legendY = P.t + CH + 48;
+        svg.appendChild(svgEl("line", {
+          x1: legendX, y1: legendY - 3, x2: legendX + 14, y2: legendY - 3,
+          stroke: color, "stroke-width": 3,
+        }));
+        svg.appendChild(svgEl("text", {
+          x: legendX + 20, y: legendY, fill: "rgba(200,210,225,0.65)", "font-size": 10,
+        }, label));
+      });
+      svg.appendChild(svgEl("rect", {
+        x: P.l, y: P.t, width: CW, height: CH,
+        fill: "none", stroke: "rgba(141,200,255,0.12)", "stroke-width": 1,
+      }));
+      svg.appendChild(svgEl("text", {
+        x: -(P.t + CH / 2), y: 14, transform: "rotate(-90)",
+        "text-anchor": "middle", fill: "rgba(200,210,225,0.4)", "font-size": 10,
+      }, "Model probability"));
+    }
+
     // Stub — real implementation provided by the Three.js module below
     function drawKnowledgeGraph() {
       if (typeof window._kgInit === "function") window._kgInit(window.__KG_EXPERIMENT__ || "experiment-1");
@@ -1954,11 +2182,14 @@
           btn.classList.add("viz-tab-active");
           document.getElementById("viz-panel-" + btn.dataset.viz).classList.add("viz-panel-active");
           if (btn.dataset.viz === "rate-timeline") drawRateTimeline();
+          else if (btn.dataset.viz === "model-history") drawModelProbabilityHistory();
           else if (btn.dataset.viz === "knowledge-graph") drawKnowledgeGraph();
           else if (btn.dataset.viz === "raw-data") drawRawDataTable();
         });
       });
       drawRateTimeline();
+      document.getElementById("model-history-meeting")?.addEventListener("change", drawModelProbabilityHistory);
+      drawModelProbabilityHistory();
       drawRawDataTable();
     }
 

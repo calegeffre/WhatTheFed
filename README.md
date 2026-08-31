@@ -30,6 +30,9 @@ Every input is normalized to a `-1` (dovish/cut) to `+1` (hawkish/raise) scale.
 The final bias is converted to raise/hold/cut probabilities with a softmax that
 preserves a neutral preference for holding. Experiment 7 applies empirical
 shocks to this baseline over 520 deterministic Monte Carlo draws.
+Each hosted refresh also appends the resulting raise/hold/cut probabilities to
+the deployed model-history payload. The dashboard charts those snapshots by
+target FOMC meeting so changes in the model can be followed into each decision.
 If any required payload is missing or invalid, the headline and affected heat
 cards display `?` with an error instead of substituting fallback values.
 
@@ -60,6 +63,7 @@ stale or substitute data.
 - Browser-ready payloads are exported to `data/*.js` and loaded by `index.html`.
 - A graph payload is also exported for the knowledge-graph view.
 - Hosted builds use a disposable SQLite database and upload only `index.html` plus generated JavaScript payloads; the database is never included in the Pages artifact.
+- Model probability history is carried forward from the currently deployed Pages payload and extended after a complete successful build. A missing history file starts a new archive; other retrieval or validation failures stop deployment rather than erase prior snapshots.
 
 Build the same static artifact locally with:
 
