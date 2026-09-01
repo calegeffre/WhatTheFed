@@ -2385,7 +2385,7 @@
         state = null;
       }
 
-      function makeNode(scene, x, y, z, hexColor, radius, label, sublabel, hoverSublabel = false) {
+      function makeNode(scene, x, y, z, hexColor, radius, label, sublabel, hoverSublabel = true) {
         const group = new THREE.Group();
         group.position.set(x, y, z);
         scene.add(group);
