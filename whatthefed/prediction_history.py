@@ -20,7 +20,8 @@ MACRO_WEIGHTS = {
     "fiscal": 0.04,
 }
 ENSEMBLE_WEIGHTS = {"market": 0.45, "policy": 0.55}
-MODEL_VERSION = "all-data-v1"
+HOLD_UTILITY = 0.30
+MODEL_VERSION = "all-data-v2"
 PAYLOAD_GLOBALS = {
     "fomc": ("fomc_dashboard_data.js", "__FOMC_DASHBOARD_DATA__"),
     "market": ("market_dashboard_data.js", "__MARKET_DASHBOARD_DATA__"),
@@ -78,7 +79,7 @@ def _parse_date(value: object, label: str) -> date:
 
 def _probabilities_from_bias(bias: float, confidence: float) -> dict[str, float]:
     temperature = 1.6 + 2.4 * _clamp(confidence, 0.0, 1.0)
-    utilities = {"raise": bias, "hold": 0.45, "cut": -bias}
+    utilities = {"raise": bias, "hold": HOLD_UTILITY, "cut": -bias}
     weights = {key: math.exp(value * temperature) for key, value in utilities.items()}
     total = sum(weights.values())
     return {key: value / total for key, value in weights.items()}

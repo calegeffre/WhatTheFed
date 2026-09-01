@@ -39,6 +39,7 @@ EXPECTED_PAYLOADS = (
     "ppi_dashboard_data.js",
     "fiscal_dashboard_data.js",
     "gdp_dashboard_data.js",
+    "fed_events_dashboard_data.js",
     "model_probability_history_data.js",
 )
 MAX_COMMAND_ATTEMPTS = 3
@@ -207,6 +208,15 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                     "--db-path", str(db_path),
                     "--start-year", str(current_year - 12),
                     "--dashboard-js", str(data_dir / "gdp_dashboard_data.js"),
+                ],
+            ),
+            (
+                "Federal Reserve events",
+                "whatthefed.fed_events_ingestion",
+                [
+                    "--start-date", today.isoformat(),
+                    "--months", "4",
+                    "--dashboard-js", str(data_dir / "fed_events_dashboard_data.js"),
                 ],
             ),
         ]

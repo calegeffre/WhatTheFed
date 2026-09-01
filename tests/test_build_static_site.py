@@ -99,10 +99,10 @@ def test_prediction_snapshot_records_all_three_probabilities() -> None:
     )
 
     assert snapshot["target_meeting"] == "2026-09-16"
-    assert snapshot["decision"] == "hold"
-    assert snapshot["model_version"] == "all-data-v1"
+    assert snapshot["decision"] == "raise"
+    assert snapshot["model_version"] == "all-data-v2"
     assert sum(snapshot["probabilities"].values()) == pytest.approx(1.0, abs=0.000002)
-    assert snapshot["confidence"] == snapshot["probabilities"]["hold"]
+    assert snapshot["confidence"] == snapshot["probabilities"]["raise"]
 
 
 def test_prediction_snapshot_requires_both_market_providers() -> None:

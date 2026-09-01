@@ -4,7 +4,7 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 
 ## Data sources
 
-- **Federal Reserve**: official FOMC statement pages
+- **Federal Reserve**: official FOMC statement pages and monthly event calendars
 - **BLS**: CPI, PPI, and labor time-series data
 - **U.S. Treasury**: daily par yield curve rates (1 Mo through 30 Yr), plus TIPS real yields used to derive breakeven inflation expectations
 - **Treasury Fiscal Data**: Monthly Treasury Statement receipts, outlays, and deficit/surplus
@@ -28,7 +28,8 @@ market bias = P(raise) - P(cut)
 
 Every input is normalized to a `-1` (dovish/cut) to `+1` (hawkish/raise) scale.
 The final bias is converted to raise/hold/cut probabilities with a softmax that
-preserves a neutral preference for holding. Experiment 7 applies empirical
+preserves a modest neutral preference for holding (`0.30` utility, reduced from
+the original `0.45`). Experiment 7 applies empirical
 shocks to this baseline over 520 deterministic Monte Carlo draws.
 Each hosted refresh also appends the resulting raise/hold/cut probabilities to
 the deployed model-history payload. The dashboard charts those snapshots by
@@ -62,6 +63,7 @@ stale or substitute data.
 - Data is stored in **SQLite** at `data/market_snapshots.db` (statements, macro observations, market snapshots, and derived records).
 - Browser-ready payloads are exported to `data/*.js` and loaded by `index.html`.
 - A graph payload is also exported for the knowledge-graph view.
+- The official Fed calendar is checked for upcoming speeches from all Board speakers, with Chair events highlighted and official livestream links retained.
 - Hosted builds use a disposable SQLite database and upload only `index.html` plus generated JavaScript payloads; the database is never included in the Pages artifact.
 - Model probability history is carried forward from the currently deployed Pages payload and extended after a complete successful build. A missing history file starts a new archive; other retrieval or validation failures stop deployment rather than erase prior snapshots.
 

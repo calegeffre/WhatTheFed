@@ -168,6 +168,41 @@
     .section {
       margin-top: 24px;
     }
+    .fed-events-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .fed-events-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .fed-event-card {
+      display: grid;
+      gap: 7px;
+      align-content: start;
+      padding: 15px;
+      border: 1px solid rgba(141, 200, 255, 0.13);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .fed-event-card-chair {
+      border-color: rgba(247, 178, 103, 0.55);
+      background: rgba(247, 178, 103, 0.09);
+    }
+    .fed-event-card h3 {
+      color: var(--text);
+      font-size: 16px;
+    }
+    .fed-event-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 5px;
+    }
 
     .voter-card {
       background: rgba(255, 255, 255, 0.04);
@@ -592,6 +627,8 @@
       .viz-tabs { flex-wrap: wrap; }
       .model-history-header { display: grid; }
       .model-history-picker { min-width: 0; }
+      .fed-events-grid { grid-template-columns: 1fr; }
+      .fed-events-heading { display: grid; }
     }
     .kg-tab {
       padding: 6px 12px;
@@ -645,6 +682,25 @@
     </section>
 
     <section class="section">
+      <div class="fed-events-heading">
+        <div>
+          <div class="eyebrow">Upcoming Fed Communication</div>
+          <h2>Scheduled speeches and appearances</h2>
+          <p id="fed-events-summary" class="note">
+            Official Federal Reserve calendar; Chair appearances are highlighted.
+          </p>
+        </div>
+        <a
+          class="pill"
+          href="https://www.federalreserve.gov/newsevents/calendar.htm"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Full Fed calendar</a>
+      </div>
+      <div id="fed-events-grid" class="fed-events-grid"></div>
+    </section>
+
+    <section class="section">
       <div class="eyebrow">Data at a glance</div>
       <p class="note">Every signal feeding the prediction above, grouped by source: FOMC statement, inflation, labor, and prediction markets.</p>
       <div id="heat-map" class="heat-map"></div>
@@ -691,7 +747,7 @@
           <button class="kg-tab" data-kg-exp="experiment-2">Experiment 2 · Source Clusters</button>
           <button class="kg-tab" data-kg-exp="experiment-3">Experiment 3 · Timeline Lanes</button>
           <button class="kg-tab" data-kg-exp="experiment-4">Experiment 4 · Contribution Sunburst</button>
-          <button class="kg-tab" data-kg-exp="experiment-5">Experiment 5 · Correlation Web</button>
+          <button class="kg-tab" data-kg-exp="experiment-5">Experiment 5 · Dual Mandate</button>
           <button class="kg-tab" data-kg-exp="experiment-6">Experiment 6 · Decision Funnel</button>
           <button class="kg-tab" data-kg-exp="experiment-7">Experiment 7 · Monte Carlo Cloud</button>
           <button class="kg-tab" data-kg-exp="experiment-8">Experiment 8 · Sensitivity Tornado</button>
@@ -774,14 +830,14 @@
 
           <article class="experiment-details-card">
             <span class="experiment-number">Experiment 5</span>
-            <h3>Correlation Web</h3>
-            <h4>ELI5: Draw a string between clues that often move together.</h4>
-            <p>The 16 most volatile eligible series are linked when their recent percentage changes have a Pearson correlation of at least 0.55 in either direction.</p>
+            <h3>Dual Mandate</h3>
+            <h4>ELI5: See which side of the Fed's job needs more attention.</h4>
+            <p>Current evidence sits between maximum employment and stable prices according to which mandate it informs most.</p>
             <ul>
-              <li><strong>Red link:</strong> the two series tend to move together.</li>
-              <li><strong>Blue link:</strong> one tends to rise when the other falls.</li>
-              <li><strong>Size:</strong> recent volatility; color shows recent trend.</li>
-              <li><strong>Watch out:</strong> correlation is not causation, and short histories can be noisy.</li>
+              <li><strong>Left/right:</strong> employment relevance to inflation relevance.</li>
+              <li><strong>Size:</strong> model weight combined with how far the signal is from neutral.</li>
+              <li><strong>Mandate size:</strong> its share of current macro attention.</li>
+              <li><strong>Use it for:</strong> seeing whether prices or employment currently demands more attention.</li>
             </ul>
             <button class="experiment-open" data-open-experiment="experiment-5">Open this experiment</button>
           </article>
@@ -853,6 +909,7 @@
     window.__PPI_DASHBOARD_DATA__ = window.__PPI_DASHBOARD_DATA__ || null;
     window.__FISCAL_DASHBOARD_DATA__ = window.__FISCAL_DASHBOARD_DATA__ || null;
     window.__GDP_DASHBOARD_DATA__ = window.__GDP_DASHBOARD_DATA__ || null;
+    window.__FED_EVENTS_DASHBOARD_DATA__ = window.__FED_EVENTS_DASHBOARD_DATA__ || null;
     window.__MODEL_PROBABILITY_HISTORY_DATA__ = window.__MODEL_PROBABILITY_HISTORY_DATA__ || null;
     window.__KG_EXPERIMENT__ = window.__KG_EXPERIMENT__ || "experiment-1";
     window.__KG_MEETING_OFFSET__ = window.__KG_MEETING_OFFSET__ || 0;
@@ -870,6 +927,7 @@
   <script src="data/ppi_dashboard_data.js"></script>
   <script src="data/fiscal_dashboard_data.js"></script>
   <script src="data/gdp_dashboard_data.js"></script>
+  <script src="data/fed_events_dashboard_data.js"></script>
   <script src="data/model_probability_history_data.js"></script>
   <script>
     const dashboardData = {
@@ -958,6 +1016,7 @@
     const ppiOverlay = window.__PPI_DASHBOARD_DATA__;
     const fiscalOverlay = window.__FISCAL_DASHBOARD_DATA__;
     const gdpOverlay = window.__GDP_DASHBOARD_DATA__;
+    const fedEventsOverlay = window.__FED_EVENTS_DASHBOARD_DATA__;
     const modelHistoryOverlay = window.__MODEL_PROBABILITY_HISTORY_DATA__;
     const normalizeTriplet = (values) => {
       const parsed = {
@@ -987,6 +1046,7 @@
         fiscal: 0.04,
       });
       const ensembleWeights = Object.freeze({ market: 0.45, policy: 0.55 });
+      const holdUtility = 0.30;
       const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
       function blendMacro(inputs) {
@@ -1002,7 +1062,7 @@
 
       function probabilitiesFromBias(bias, confidence) {
         const temperature = 1.6 + 2.4 * clamp(confidence, 0, 1);
-        const utilities = { raise: bias, hold: 0.45, cut: -bias };
+        const utilities = { raise: bias, hold: holdUtility, cut: -bias };
         const weights = Object.fromEntries(
           Object.entries(utilities).map(([key, value]) => [key, Math.exp(value * temperature)]),
         );
@@ -1029,7 +1089,7 @@
         return { bias, macroBias, policyBias, probabilities, decision, confidence: decisionConfidence };
       }
 
-      return { macroWeights, ensembleWeights, blendMacro, probabilitiesFromBias, evaluate };
+      return { macroWeights, ensembleWeights, holdUtility, blendMacro, probabilitiesFromBias, evaluate };
     })();
     window.__WTF_DECISION_MODEL__ = decisionModel;
 
@@ -1142,7 +1202,7 @@
           `Net bias ${result.bias >= 0 ? "+" : ""}${result.bias.toFixed(2)} = ` +
           `45% markets + 55% policy model; policy model = ` +
           `${Math.round(carry * 100)}% prior FOMC + ${Math.round((1 - carry) * 100)}% macro. ` +
-          `Macro weights: ${macroWeightText}.`,
+          `Hold prior utility ${decisionModel.holdUtility.toFixed(2)}. Macro weights: ${macroWeightText}.`,
       };
     })();
 
@@ -1272,6 +1332,54 @@
       ...gdpHeatCards,
       ...marketHeatCards,
     ];
+
+    function renderFedEvents() {
+      const grid = document.getElementById("fed-events-grid");
+      const summary = document.getElementById("fed-events-summary");
+      if (!grid || !summary) return;
+      const allEvents = Array.isArray(fedEventsOverlay?.events) ? fedEventsOverlay.events : [];
+      if (!allEvents.length) {
+        summary.textContent = fedEventsOverlay
+          ? "No upcoming Board speeches are currently listed on the official calendar."
+          : "Upcoming events unavailable: missing Federal Reserve calendar payload.";
+        grid.innerHTML = `<div class="model-history-empty">${fedEventsOverlay ? "No scheduled speeches found." : "ERROR: Federal Reserve event data unavailable."}</div>`;
+        return;
+      }
+
+      const nextChairEvent = allEvents.find((event) => event.is_chair);
+      const events = allEvents.slice(0, 6);
+      if (nextChairEvent && !events.includes(nextChairEvent)) {
+        events[events.length - 1] = nextChairEvent;
+        events.sort((a, b) => (
+          String(a.event_date).localeCompare(String(b.event_date))
+          || String(a.time_et).localeCompare(String(b.time_et))
+        ));
+      }
+      const chairEvents = allEvents.filter((event) => event.is_chair).length;
+      summary.textContent = chairEvents
+        ? `${chairEvents} upcoming Chair ${chairEvents === 1 ? "appearance" : "appearances"} highlighted below. Times are Eastern.`
+        : "No Chair appearance is currently listed; upcoming Board speakers are shown below. Times are Eastern.";
+      grid.innerHTML = events.map((event) => {
+        const eventDate = new Date(`${event.event_date}T12:00:00Z`).toLocaleDateString("en-US", {
+          weekday: "short", month: "short", day: "numeric", timeZone: "UTC",
+        });
+        const watchLink = event.watch_url
+          ? `<a class="source-pill" href="${escHtml(event.watch_url)}" target="_blank" rel="noopener noreferrer">Watch live</a>`
+          : "";
+        return `
+          <article class="fed-event-card${event.is_chair ? " fed-event-card-chair" : ""}">
+            <div class="eyebrow">${escHtml(eventDate)} · ${escHtml(event.time_et || "Time TBD")} ET</div>
+            <h3>${escHtml(event.title || "Topic not yet published")}</h3>
+            <div>${escHtml(event.speaker)}</div>
+            <p class="note">${escHtml(event.venue || "Venue not yet published")}</p>
+            <div class="fed-event-links">
+              ${watchLink}
+              <a class="source-pill" href="${escHtml(event.source_url)}" target="_blank" rel="noopener noreferrer">Official calendar</a>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
 
     const nextMeetingDate = marketOverlay?.target_meeting || fomcOverlay?.meeting_date || "?";
     document.getElementById("summary").textContent =
@@ -1649,7 +1757,8 @@
         : "tracking begins with this snapshot";
       summary.textContent =
         `${capturedLabel}: Raise ${formatPct(latestProbabilities.raise)}, ` +
-        `Hold ${formatPct(latestProbabilities.hold)}, Cut ${formatPct(latestProbabilities.cut)}; ${changeText}.`;
+        `Hold ${formatPct(latestProbabilities.hold)}, Cut ${formatPct(latestProbabilities.cut)}; ${changeText}. ` +
+        `Latest calibration: ${latest.model_version || "unversioned"}.`;
 
       const VW = 800, VH = 320;
       const P = { t: 28, r: 28, b: 62, l: 58 };
@@ -1707,7 +1816,11 @@
           const timestamp = new Date(point.captured_at).toLocaleString("en-US", {
             month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
           });
-          circle.appendChild(svgEl("title", {}, `${timestamp}: ${label} ${formatPct(point.probabilities[key])}`));
+          circle.appendChild(svgEl(
+            "title",
+            {},
+            `${timestamp}: ${label} ${formatPct(point.probabilities[key])} · ${point.model_version || "unversioned"}`,
+          ));
           svg.appendChild(circle);
         });
       });
@@ -2195,6 +2308,7 @@
 
     initKgExperimentTabs();
     initVizTabs();
+    renderFedEvents();
   </script>
   <script type="module">
     import * as THREE from "three";
@@ -2213,56 +2327,48 @@
           camera: [0, 3.4, 13.5],
           target: [0, 1.2, 0],
           distance: [5, 28],
-          chainY: 5.4,
           legend: `Layout: x-axis = policy bias. ${BIAS_SCALE_BAR} lower → hold → raise. Size = signal weight × |bias|. Drop lines tie each node to the bias axis.`,
         },
         "experiment-2": {
           camera: [0, 6.4, 16.5],
           target: [0, 1.6, 0],
           distance: [6, 34],
-          chainY: 7.4,
           legend: `Layout: one cluster per source on a shared ring. Size = category relevance to Fed policy. ${BIAS_SCALE_BAR} colour = that chunk's share of its domain bias.`,
         },
         "experiment-3": {
           camera: [0, 3.2, 17.0],
           target: [0, 1.0, 0],
           distance: [6, 36],
-          chainY: 6.2,
           legend: "Layout: eight time lanes (GDP / CPI / PPI / Labor / Treasury / Breakeven / Money Market / Fiscal). x = time, z = value normalised within each series, size = local change. The blue marker is the focused meeting date.",
         },
         "experiment-4": {
           camera: [0, 7.6, 17.5],
           target: [0, 1.6, 0],
           distance: [7, 38],
-          chainY: 7.2,
           legend: `Layout: sunburst of weight chunks — arc length = share of total decision weight, ring 1 = source, ring 2 = category chunk. ${BIAS_SCALE_BAR} colour = bias contribution.`,
         },
         "experiment-5": {
-          camera: [0, 4.6, 16.0],
-          target: [0, 1.2, 0],
-          distance: [6, 34],
-          chainY: 6.6,
-          legend: `Layout: force-relaxed correlation web. Edge = |corr| ≥ 0.55 of month-over-month changes (red = moves together, blue = moves opposite). Size = volatility. ${BIAS_SCALE_BAR} colour = recent trend direction.`,
+          camera: [0, 2.0, 17.2],
+          target: [0, 0.0, 0],
+          distance: [6, 36],
+          legend: "Layout: dual mandate. Left = employment, right = inflation; factor position = mandate relevance and size = fixed model weight × current signal intensity. Mandate node size summarizes its share of current macro attention.",
         },
         "experiment-6": {
           camera: [0, 4.2, 17.5],
           target: [0, 0.6, 0],
           distance: [6, 36],
-          chainY: 6.8,
           legend: `Layout: decision funnel. Left = raw source chunks, middle = domains, right = outcome gates sized by probability. Strand count = flow volume; each domain splits across raise/hold/cut by the sign of its bias. ${BIAS_SCALE_BAR}`,
         },
         "experiment-7": {
           camera: [0, 3.0, 16.5],
           target: [0, -0.4, 0],
           distance: [6, 36],
-          chainY: 6.4,
           legend: `Layout: Monte Carlo scenario cloud. 520 seeded draws shock markets, all eight macro domains, and carry-over around the shared all-data ensemble; x = resulting bias, z = CPI shock, y = labor shock. ${BIAS_SCALE_BAR} colour = sampled decision. Bars = outcome frequency.`,
         },
         "experiment-8": {
           camera: [0, 2.4, 15.5],
           target: [0, 0.2, 0],
           distance: [6, 34],
-          chainY: 6.0,
           legend: `Layout: sensitivity tornado. Bar length = change in meeting bias per +0.25 move in that input (sorted by leverage). Left-hand markers show how far the input must move to flip the modal decision. ${BIAS_SCALE_BAR}`,
         },
       };
@@ -2279,7 +2385,7 @@
         state = null;
       }
 
-      function makeNode(scene, x, y, z, hexColor, radius, label, sublabel) {
+      function makeNode(scene, x, y, z, hexColor, radius, label, sublabel, hoverSublabel = false) {
         const group = new THREE.Group();
         group.position.set(x, y, z);
         scene.add(group);
@@ -2288,11 +2394,13 @@
           color: hexColor, transparent: true, opacity: 0.88,
           emissive: hexColor, emissiveIntensity: 0.07,
         });
-        group.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), mat));
-        group.add(new THREE.Mesh(
+        const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), mat);
+        const halo = new THREE.Mesh(
           new THREE.SphereGeometry(radius * 1.45, 10, 5),
           new THREE.MeshBasicMaterial({ color: hexColor, transparent: true, opacity: 0.07, wireframe: true }),
-        ));
+        );
+        group.add(sphere);
+        group.add(halo);
 
         if (label) {
           const lDiv = document.createElement("div");
@@ -2309,6 +2417,13 @@
             sDiv.style.cssText = `font-size:9px;font-weight:500;color:#${hexColor.toString(16).padStart(6,"0")};
               padding:1px 5px;background:rgba(8,17,31,0.65);border-radius:3px;white-space:nowrap;
               font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;margin-top:1px;`;
+            if (hoverSublabel) {
+              sDiv.style.opacity = "0";
+              sDiv.style.visibility = "hidden";
+              sDiv.style.transition = "opacity 120ms ease";
+              sphere.userData.hoverSublabel = sDiv;
+              halo.userData.hoverSublabel = sDiv;
+            }
             sDiv.textContent = sublabel;
             const sObj = new CSS2DObject(sDiv);
             sObj.position.set(0, radius + 0.68, 0);
@@ -2371,27 +2486,6 @@
       function categoryWeight(domain, category) {
         const table = CATEGORY_WEIGHTS[domain] || {};
         return table[String(category || "").toLowerCase()] ?? 0.45;
-      }
-
-      function pearson(a, b) {
-        const n = Math.min(a.length, b.length);
-        if (n < 3) return 0;
-        const xs = a.slice(-n);
-        const ys = b.slice(-n);
-        const meanX = xs.reduce((sum, v) => sum + v, 0) / n;
-        const meanY = ys.reduce((sum, v) => sum + v, 0) / n;
-        let num = 0;
-        let dx = 0;
-        let dy = 0;
-        for (let i = 0; i < n; i += 1) {
-          const vx = xs[i] - meanX;
-          const vy = ys[i] - meanY;
-          num += vx * vy;
-          dx += vx * vx;
-          dy += vy * vy;
-        }
-        const denom = Math.sqrt(dx * dy);
-        return denom > 0 ? clamp(num / denom, -1, 1) : 0;
       }
 
       function addArc(scene, radius, y, startAngle, endAngle, hexColor, opacity) {
@@ -2738,63 +2832,6 @@
           fiscalBias,
           gdpBias,
         };
-      }
-
-      function addMeetingChain(scene, context, chainY) {
-        const chain = context.chain || [];
-        if (!chain.length) return;
-        const spacing = 2.7;
-        const startX = -((chain.length - 1) / 2) * spacing;
-        const positions = chain.map((_, index) => [startX + index * spacing, chainY, 0]);
-
-        chain.forEach((entry, index) => {
-          const focused = index === context.focusIndex;
-          const importance = clamp(0.3 + Math.abs(entry.bias) * 0.45 + entry.confidence * 0.3, 0, 1);
-          const radius = focused
-            ? importanceRadius(importance, 0.3, 0.6)
-            : importanceRadius(importance, 0.11, 0.26);
-          const statusMark = entry.status === "held" ? "✓" : entry.status === "priced" ? "◉" : "◇";
-          makeNode(
-            scene,
-            positions[index][0],
-            positions[index][1],
-            positions[index][2],
-            biasToColorHex(entry.bias),
-            radius,
-            `${focused ? "▶ " : ""}${statusMark} ${entry.label}`,
-            entry.detail,
-          );
-
-          if (focused) {
-            const ring = new THREE.Mesh(
-              new THREE.TorusGeometry(radius * 2.1, 0.022, 8, 56),
-              new THREE.MeshBasicMaterial({ color: 0x8dc8ff, transparent: true, opacity: 0.75 }),
-            );
-            ring.position.set(positions[index][0], positions[index][1], positions[index][2]);
-            ring.rotation.x = Math.PI / 2;
-            scene.add(ring);
-          }
-
-          if (index > 0) {
-            const carry = clamp(Number(entry.carry ?? 0.4), 0.05, 1);
-            addEdge(scene, positions[index - 1], positions[index], 0x8dc8ff, clamp(carry, 0.12, 0.85));
-            const midX = (positions[index - 1][0] + positions[index][0]) / 2;
-            makeNode(
-              scene,
-              midX,
-              chainY + 0.7,
-              0,
-              biasToColorHex(chain[index - 1].bias),
-              0.04 + carry * 0.11,
-              `carry ${Math.round(carry * 100)}%`,
-              `${entry.releases || 0} new CPI/jobs prints`,
-            );
-            addEdge(scene, [midX, chainY + 0.7, 0], [midX, chainY, 0], 0x8dc8ff, 0.18);
-          }
-        });
-
-        // Tie the focused meeting into the rest of the scene.
-        addEdge(scene, positions[context.focusIndex], [0, chainY - 1.6, 0], 0x8dc8ff, 0.25);
       }
 
       // Older graph payloads key observations as "<series>:<date>"; the newer NY Fed and
@@ -3197,122 +3234,6 @@
         addReferenceGrid(scene);
       }
 
-      function collectDomainSeries(perSeriesLimit = 12) {
-        const configs = [
-          {
-            domain: "GDP",
-            color: 0x56d4dd,
-            graph: window.__GDP_DASHBOARD_DATA__?.gdp_graph,
-            seriesKind: "gdp_series",
-            observationKind: "gdp_observation",
-            seriesPrefix: "gdp-series-",
-            observationPrefix: "gdp-",
-            seriesKeyOf: hyphenDateSeriesKeyOf,
-          },
-          {
-            domain: "CPI",
-            color: 0xff7b72,
-            graph: window.__KG_DASHBOARD_DATA__?.cpi_graph,
-            seriesKind: "cpi_series",
-            observationKind: "cpi_observation",
-            seriesPrefix: "cpi-series:",
-            observationPrefix: "cpi-obs:",
-          },
-          {
-            domain: "Labor",
-            color: 0x7bd389,
-            graph: window.__LABOR_KG_DASHBOARD_DATA__?.labor_graph,
-            seriesKind: "labor_series",
-            observationKind: "labor_observation",
-            seriesPrefix: "labor-series:",
-            observationPrefix: "labor-obs:",
-          },
-          {
-            domain: "PPI",
-            color: 0xf97583,
-            graph: window.__PPI_DASHBOARD_DATA__?.ppi_graph,
-            seriesKind: "ppi_series",
-            observationKind: "ppi_observation",
-            seriesPrefix: "ppi-series-",
-            observationPrefix: "ppi-",
-            seriesKeyOf: hyphenDateSeriesKeyOf,
-          },
-          {
-            domain: "Treasury",
-            color: 0xf2cc60,
-            graph: window.__TREASURY_DASHBOARD_DATA__?.treasury_graph,
-            seriesKind: "treasury_series",
-            observationKind: "treasury_observation",
-            seriesPrefix: "treasury-series:",
-            observationPrefix: "treasury-obs:",
-          },
-          {
-            domain: "Breakeven",
-            color: 0xffa657,
-            graph: window.__BREAKEVEN_DASHBOARD_DATA__?.breakeven_graph,
-            seriesKind: "breakeven_series",
-            observationKind: "breakeven_observation",
-            seriesPrefix: "breakeven-series-",
-            observationPrefix: "breakeven-",
-            seriesKeyOf: hyphenDateSeriesKeyOf,
-          },
-          {
-            domain: "Money Market",
-            color: 0xd2a8ff,
-            graph: window.__POLICY_RATE_DASHBOARD_DATA__?.policy_rate_graph,
-            seriesKind: "policy_rate_series",
-            observationKind: "policy_rate_observation",
-            seriesPrefix: "policy-rate-series-",
-            observationPrefix: "policy-rate-",
-            seriesKeyOf: hyphenDateSeriesKeyOf,
-          },
-          {
-            domain: "Fiscal",
-            color: 0xff9f43,
-            graph: window.__FISCAL_DASHBOARD_DATA__?.fiscal_graph,
-            seriesKind: "fiscal_series",
-            observationKind: "fiscal_observation",
-            seriesPrefix: "fiscal-series-",
-            observationPrefix: "fiscal-",
-            seriesKeyOf: hyphenDateSeriesKeyOf,
-          },
-        ];
-
-        const series = [];
-        configs.forEach((config) => {
-          const grouped = new Map();
-          extractGraphObservations({ ...config, perSeriesLimit }).forEach((point) => {
-            const key = `${config.domain}:${point.seriesKey}`;
-            if (!grouped.has(key)) {
-              grouped.set(key, { key, domain: config.domain, color: config.color, label: point.seriesLabel, points: [] });
-            }
-            grouped.get(key).points.push(point);
-          });
-          grouped.forEach((entry) => {
-            entry.points.sort((a, b) => a.timestamp - b.timestamp);
-            const changes = [];
-            for (let i = 1; i < entry.points.length; i += 1) {
-              const prev = entry.points[i - 1].value;
-              const curr = entry.points[i].value;
-              changes.push((curr - prev) / Math.max(Math.abs(prev), 0.0001));
-            }
-            if (changes.length < 3) return;
-            const mean = changes.reduce((sum, v) => sum + v, 0) / changes.length;
-            const variance = changes.reduce((sum, v) => sum + (v - mean) ** 2, 0) / changes.length;
-            const recent = changes.slice(-3);
-            const trend = recent.reduce((sum, v) => sum + v, 0) / recent.length;
-            series.push({
-              ...entry,
-              changes,
-              volatility: Math.sqrt(variance),
-              trend,
-              latest: entry.points[entry.points.length - 1],
-            });
-          });
-        });
-        return series;
-      }
-
       function buildGraphExperiment4(scene, context) {
         const signalChildren = context.signals.map((signal) => {
           const label = String(signal?.label || "Signal");
@@ -3462,107 +3383,105 @@
       }
 
       function buildGraphExperiment5(scene, context) {
-        const allSeries = collectDomainSeries(12)
-          .sort((a, b) => b.volatility - a.volatility)
-          .slice(0, 16);
-
-        makeNode(scene, 0, 4.2, 0, 0x8dc8ff, 0.34, "Correlation Web", "edges = co-movement");
-        if (allSeries.length < 2) {
-          addReferenceGrid(scene);
-          return;
-        }
-
-        const maxVolatility = Math.max(...allSeries.map((item) => item.volatility), 0.0001);
-        const maxTrend = Math.max(...allSeries.map((item) => Math.abs(item.trend)), 0.0001);
-        const domains = [...new Set(allSeries.map((item) => item.domain))];
-
-        const nodes = allSeries.map((series, index) => {
-          const domainIndex = domains.indexOf(series.domain);
-          const sectorSpan = (Math.PI * 2) / domains.length;
-          const withinDomain = allSeries.filter((item) => item.domain === series.domain);
-          const positionInDomain = withinDomain.indexOf(series);
-          const angle = domainIndex * sectorSpan + ((positionInDomain + 0.5) / withinDomain.length) * sectorSpan * 0.85;
-          const radius = 3.0 + (index % 3) * 0.7;
+        const factors = [
+          { key: "labor", label: "Labor", bias: context.laborBias, affinity: -0.95 },
+          { key: "gdp", label: "GDP", bias: context.gdpBias || 0, affinity: -0.65 },
+          { key: "fiscal", label: "Fiscal impulse", bias: context.fiscalBias || 0, affinity: -0.15 },
+          { key: "policyRate", label: "Funding conditions", bias: context.policyRateBias || 0, affinity: 0.0 },
+          { key: "treasury", label: "Treasury curve", bias: context.treasurySlopeBias, affinity: 0.25 },
+          { key: "breakeven", label: "Breakevens", bias: context.breakevenBias || 0, affinity: 0.85 },
+          { key: "ppi", label: "PPI", bias: context.ppiBias || 0, affinity: 0.90 },
+          { key: "cpi", label: "CPI", bias: context.cpiBias, affinity: 0.98 },
+        ].map((factor) => {
+          const weight = Number(MACRO_WEIGHTS[factor.key] || 0);
+          const intensity = weight * (0.20 + 0.80 * Math.abs(factor.bias));
+          const inflationShare = (factor.affinity + 1) / 2;
           return {
-            series,
-            x: Math.cos(angle) * radius,
-            y: (domainIndex - (domains.length - 1) / 2) * 1.5,
-            z: Math.sin(angle) * radius,
+            ...factor,
+            weight,
+            intensity,
+            inflationShare,
+            employmentShare: 1 - inflationShare,
           };
         });
 
-        const links = [];
-        for (let i = 0; i < nodes.length; i += 1) {
-          for (let j = i + 1; j < nodes.length; j += 1) {
-            const corr = pearson(nodes[i].series.changes, nodes[j].series.changes);
-            if (Math.abs(corr) >= 0.55) links.push({ a: i, b: j, corr });
-          }
-        }
+        const attention = factors.reduce(
+          (totals, factor) => ({
+            inflation: totals.inflation + factor.intensity * factor.inflationShare,
+            employment: totals.employment + factor.intensity * factor.employmentShare,
+          }),
+          { inflation: 0, employment: 0 },
+        );
+        const attentionTotal = Math.max(0.0001, attention.inflation + attention.employment);
+        const inflationAttention = attention.inflation / attentionTotal;
+        const employmentAttention = attention.employment / attentionTotal;
+        const maxIntensity = Math.max(...factors.map((factor) => factor.intensity), 0.0001);
+        const employmentPos = [-5.0, 0.8, 0];
+        const inflationPos = [5.0, 0.8, 0];
+        const employmentColor = 0x7bd389;
+        const inflationColor = 0xff7b72;
 
-        // Deterministic spring relaxation: correlated series pull together, everything else pushes apart.
-        for (let iteration = 0; iteration < 140; iteration += 1) {
-          const forces = nodes.map(() => [0, 0, 0]);
-          for (let i = 0; i < nodes.length; i += 1) {
-            for (let j = i + 1; j < nodes.length; j += 1) {
-              const dx = nodes[j].x - nodes[i].x;
-              const dy = nodes[j].y - nodes[i].y;
-              const dz = nodes[j].z - nodes[i].z;
-              const dist = Math.max(0.35, Math.sqrt(dx * dx + dy * dy + dz * dz));
-              const push = 1.5 / (dist * dist);
-              forces[i][0] -= (dx / dist) * push;
-              forces[i][1] -= (dy / dist) * push;
-              forces[i][2] -= (dz / dist) * push;
-              forces[j][0] += (dx / dist) * push;
-              forces[j][1] += (dy / dist) * push;
-              forces[j][2] += (dz / dist) * push;
-            }
-          }
-          links.forEach((link) => {
-            const a = nodes[link.a];
-            const b = nodes[link.b];
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const dz = b.z - a.z;
-            const dist = Math.max(0.35, Math.sqrt(dx * dx + dy * dy + dz * dz));
-            const pull = (dist - 2.2) * 0.05 * Math.abs(link.corr);
-            forces[link.a][0] += (dx / dist) * pull;
-            forces[link.a][1] += (dy / dist) * pull;
-            forces[link.a][2] += (dz / dist) * pull;
-            forces[link.b][0] -= (dx / dist) * pull;
-            forces[link.b][1] -= (dy / dist) * pull;
-            forces[link.b][2] -= (dz / dist) * pull;
-          });
-          nodes.forEach((node, index) => {
-            node.x = clamp(node.x + forces[index][0] * 0.16, -6.5, 6.5);
-            node.y = clamp(node.y + forces[index][1] * 0.16, -3.0, 3.4);
-            node.z = clamp(node.z + forces[index][2] * 0.16, -6.5, 6.5);
-          });
-        }
+        makeNode(
+          scene,
+          ...employmentPos,
+          employmentColor,
+          importanceRadius(employmentAttention, 0.34, 0.78),
+          `EMPLOYMENT ${Math.round(employmentAttention * 100)}%`,
+          "",
+        );
+        makeNode(
+          scene,
+          ...inflationPos,
+          inflationColor,
+          importanceRadius(inflationAttention, 0.34, 0.78),
+          `INFLATION ${Math.round(inflationAttention * 100)}%`,
+          "",
+        );
 
-        links.forEach((link) => {
-          const a = nodes[link.a];
-          const b = nodes[link.b];
-          const color = link.corr >= 0 ? 0xff7b72 : 0x58a6ff;
-          addEdge(scene, [a.x, a.y, a.z], [b.x, b.y, b.z], color, clamp(Math.abs(link.corr) * 0.45, 0.08, 0.45));
-        });
-
-        nodes.forEach((node) => {
-          const series = node.series;
-          const importance = clamp(series.volatility / maxVolatility, 0.1, 1);
-          const bias = clamp(series.trend / maxTrend, -1, 1);
-          const degree = links.filter((link) => nodes[link.a] === node || nodes[link.b] === node).length;
+        factors.forEach((factor, index) => {
+          const position = [
+            factor.affinity * 3.8,
+            -2.1 + (index % 2) * 0.8,
+            ((index % 3) - 1) * 1.05,
+          ];
+          const neutral = new THREE.Color(0x8dc8ff);
+          const mandateColor = new THREE.Color(
+            factor.affinity >= 0 ? inflationColor : employmentColor,
+          );
+          const color = neutral.lerp(mandateColor, Math.abs(factor.affinity)).getHex();
           makeNode(
             scene,
-            node.x,
-            node.y,
-            node.z,
-            biasToColorHex(bias),
-            importanceRadius(importance, 0.08, 0.36),
-            series.label,
-            `${series.domain} · ${degree} links · ${series.latest.value.toFixed(2)}`,
+            ...position,
+            color,
+            importanceRadius(factor.intensity / maxIntensity, 0.10, 0.42),
+            factor.label,
+            `signal strength ${Math.round(Math.abs(factor.bias) * 100)}% · ` +
+              `${Math.round(factor.weight * 100)}% macro weight`,
+            true,
           );
+          if (factor.employmentShare >= 0.08) {
+            addEdge(
+              scene,
+              position,
+              employmentPos,
+              employmentColor,
+              0.08 + factor.employmentShare * 0.28,
+            );
+          }
+          if (factor.inflationShare >= 0.08) {
+            addEdge(
+              scene,
+              position,
+              inflationPos,
+              inflationColor,
+              0.08 + factor.inflationShare * 0.28,
+            );
+          }
         });
 
+        addEdge(scene, [-5.8, -3.55, 0], [5.8, -3.55, 0], 0xffffff, 0.2);
+        makeNode(scene, -5.8, -3.55, 0, employmentColor, 0.10, "Employment", "");
+        makeNode(scene, 5.8, -3.55, 0, inflationColor, 0.10, "Inflation", "");
         addReferenceGrid(scene);
       }
 
@@ -4069,8 +3988,6 @@
         } else {
           buildGraphExperiment1(scene, context);
         }
-        const view = EXPERIMENT_VIEWS[experimentId] || EXPERIMENT_VIEWS["experiment-1"];
-        addMeetingChain(scene, context, view.chainY ?? 5.4);
         return context;
       }
 
@@ -4184,8 +4101,7 @@
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping   = true;
         controls.dampingFactor   = 0.06;
-        controls.autoRotate      = true;
-        controls.autoRotateSpeed = 0.5;
+        controls.autoRotate      = false;
         controls.minDistance     = view.distance[0];
         controls.maxDistance     = view.distance[1];
         controls.target.set(view.target[0], view.target[1], view.target[2]);
@@ -4194,6 +4110,34 @@
         const context = buildGraph(scene, selectedExperiment);
         renderMeetingControls(container, context);
         renderLegend(container, selectedExperiment);
+
+        const hoverRaycaster = new THREE.Raycaster();
+        const hoverPointer = new THREE.Vector2();
+        let visibleHoverDetail = null;
+        const hideHoverDetail = () => {
+          if (!visibleHoverDetail) return;
+          visibleHoverDetail.style.opacity = "0";
+          visibleHoverDetail.style.visibility = "hidden";
+          visibleHoverDetail = null;
+        };
+        renderer.domElement.addEventListener("pointermove", (event) => {
+          const rect = renderer.domElement.getBoundingClientRect();
+          hoverPointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          hoverPointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+          hoverRaycaster.setFromCamera(hoverPointer, camera);
+          const hit = hoverRaycaster
+            .intersectObjects(scene.children, true)
+            .find((intersection) => intersection.object.userData.hoverSublabel);
+          const nextDetail = hit?.object.userData.hoverSublabel || null;
+          if (nextDetail === visibleHoverDetail) return;
+          hideHoverDetail();
+          if (nextDetail) {
+            nextDetail.style.visibility = "visible";
+            nextDetail.style.opacity = "1";
+            visibleHoverDetail = nextDetail;
+          }
+        });
+        renderer.domElement.addEventListener("pointerleave", hideHoverDetail);
 
         let animId;
         function animate() {
