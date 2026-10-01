@@ -18,8 +18,8 @@
   },
   {
     "provider": "polymarket_event",
-    "market_ref": "fed-decision-in-september-762",
-    "target_meeting": "2026-09-16",
-    "source_url": "https://polymarket.com/event/fed-decision-in-september-762"
+    "market_ref": "fed-decision-in-october-20260617190323537",
+    "target_meeting": "2026-10-28",
+    "source_url": "https://polymarket.com/event/fed-decision-in-october-20260617190323537"
   }
 ]
