@@ -933,6 +933,17 @@
     const dashboardData = {
       meeting_history: [
         {
+          label: "September 2026",
+          date: "September 16, 2026",
+          decision: "raise",
+          official_vote: "12-0",
+          url: "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm",
+          summary:
+            "The Committee raised the target range by 25 bp to 3-3/4 to 4 percent, citing resilient domestic spending, strong productivity and investment, and elevated inflation.",
+          dissent_note: "The official statement was approved unanimously.",
+          votes: ["raise", "raise", "raise", "raise", "raise", "raise", "raise", "raise", "raise", "raise", "raise", "raise"],
+        },
+        {
           label: "July 2026",
           date: "July 29, 2026",
           decision: "hold",
@@ -1461,14 +1472,21 @@
     const yearTabsEl = document.getElementById("year-tabs");
     const historyOverlay = window.__FOMC_HISTORY_DATA__;
 
-    // 2026 uses hardcoded data (voter grids + dissent notes); prior years come from parsed DB
     const allMeetingsByYear = {};
-    allMeetingsByYear["2026"] = { source: "hardcoded", meetings: dashboardData.meeting_history };
     if (historyOverlay) {
       Object.entries(historyOverlay).forEach(([year, meetings]) => {
-        if (year !== "2026") allMeetingsByYear[year] = { source: "db", meetings };
+        allMeetingsByYear[year] = { meetings };
       });
     }
+    const detailedMeetingUrls = new Set(dashboardData.meeting_history.map((meeting) => meeting.url));
+    const remaining2026Meetings = (historyOverlay?.["2026"] || []).filter(
+      (meeting) => !detailedMeetingUrls.has(meeting.source_url),
+    );
+    allMeetingsByYear["2026"] = {
+      meetings: [...dashboardData.meeting_history, ...remaining2026Meetings].sort(
+        (a, b) => Date.parse(b.meeting_date || b.date) - Date.parse(a.meeting_date || a.date),
+      ),
+    };
 
     const availableYears = Object.keys(allMeetingsByYear).sort((a, b) => Number(b) - Number(a));
     let activeYear = availableYears[0];
@@ -1570,7 +1588,7 @@
       const yearData = allMeetingsByYear[activeYear];
       if (!yearData) return;
       yearData.meetings.forEach((meeting) => {
-        const card = yearData.source === "hardcoded" ? renderFullCard(meeting) : renderDbCard(meeting);
+        const card = Array.isArray(meeting.votes) ? renderFullCard(meeting) : renderDbCard(meeting);
         meetingTimeline.appendChild(card);
       });
     }
