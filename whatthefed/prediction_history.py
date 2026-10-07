@@ -1,4 +1,4 @@
-"""Build and persist snapshots of the all-data decision model."""
+"""Build and persist separate market and macro-data prediction snapshots."""
 
 from __future__ import annotations
 
@@ -19,9 +19,11 @@ MACRO_WEIGHTS = {
     "policyRate": 0.05,
     "fiscal": 0.04,
 }
-ENSEMBLE_WEIGHTS = {"market": 0.45, "policy": 0.55}
 HOLD_UTILITY = 0.30
-MODEL_VERSION = "all-data-v2"
+DATA_TEMPERATURE = 2.40
+RECENT_ACTION_HOLD_BOOST = 0.10
+RECENT_ACTION_REVERSAL_PENALTY = 0.05
+MODEL_VERSION = "data-v1"
 PAYLOAD_GLOBALS = {
     "fomc": ("fomc_dashboard_data.js", "__FOMC_DASHBOARD_DATA__"),
     "market": ("market_dashboard_data.js", "__MARKET_DASHBOARD_DATA__"),
@@ -77,10 +79,16 @@ def _parse_date(value: object, label: str) -> date:
         raise PredictionHistoryError(f"{label} is missing or invalid.") from error
 
 
-def _probabilities_from_bias(bias: float, confidence: float) -> dict[str, float]:
-    temperature = 1.6 + 2.4 * _clamp(confidence, 0.0, 1.0)
-    utilities = {"raise": bias, "hold": HOLD_UTILITY, "cut": -bias}
-    weights = {key: math.exp(value * temperature) for key, value in utilities.items()}
+def _data_probabilities(macro_bias: float, previous_decision: str) -> dict[str, float]:
+    utilities = {"raise": macro_bias, "hold": HOLD_UTILITY, "cut": -macro_bias}
+    if previous_decision == "raise":
+        utilities["hold"] += RECENT_ACTION_HOLD_BOOST
+        utilities["cut"] -= RECENT_ACTION_REVERSAL_PENALTY
+    elif previous_decision == "cut":
+        utilities["hold"] += RECENT_ACTION_HOLD_BOOST
+        utilities["raise"] -= RECENT_ACTION_REVERSAL_PENALTY
+
+    weights = {key: math.exp(value * DATA_TEMPERATURE) for key, value in utilities.items()}
     total = sum(weights.values())
     return {key: value / total for key, value in weights.items()}
 
@@ -90,7 +98,7 @@ def build_prediction_snapshot(
     *,
     captured_at: str | None = None,
 ) -> dict[str, object]:
-    """Calculate one snapshot using the same formula as the browser headline."""
+    """Calculate separate market and macro-data snapshots used by the browser."""
 
     market = payloads.get("market")
     fomc = payloads.get("fomc")
@@ -108,20 +116,9 @@ def build_prediction_snapshot(
         _normalize_triplet(provider_payload.get("probabilities"))
 
     market_probabilities = _normalize_triplet(market.get("blended_probabilities"))
-    signals = fomc.get("signals")
-    if not isinstance(signals, list):
-        raise PredictionHistoryError("FOMC signals are missing.")
-    prior_signal = next(
-        (
-            signal
-            for signal in signals
-            if isinstance(signal, Mapping) and "bias" in str(signal.get("label", "")).lower()
-        ),
-        None,
-    )
-    if prior_signal is None:
-        raise PredictionHistoryError("FOMC bias is missing.")
-    previous_bias = _number(prior_signal.get("display"))
+    previous_decision = str(fomc.get("decision", "")).lower()
+    if previous_decision not in {"raise", "hold", "cut"}:
+        raise PredictionHistoryError("Previous FOMC decision is missing or invalid.")
 
     if not isinstance(treasury, Mapping) or not isinstance(treasury.get("points"), list):
         raise PredictionHistoryError("Treasury curve data is missing.")
@@ -151,28 +148,28 @@ def build_prediction_snapshot(
 
     meeting_date = _parse_date(market.get("target_meeting"), "Target meeting")
     previous_meeting_date = _parse_date(fomc.get("meeting_date"), "Previous FOMC meeting")
-    days_to_meeting = abs((meeting_date - previous_meeting_date).days)
-    expected_monthly_releases = max(1, math.floor(days_to_meeting / 30 + 0.5))
-    carry = _clamp(1 / (1 + expected_monthly_releases * 0.55), 0.15, 0.9)
-    policy_bias = _clamp(previous_bias * carry + macro_bias * (1 - carry), -1.0, 1.0)
-    market_bias = market_probabilities["raise"] - market_probabilities["cut"]
-    bias = _clamp(
-        ENSEMBLE_WEIGHTS["market"] * market_bias + ENSEMBLE_WEIGHTS["policy"] * policy_bias,
-        -1.0,
-        1.0,
-    )
-    probabilities = _probabilities_from_bias(bias, max(market_probabilities.values()))
-    decision = max(probabilities, key=probabilities.__getitem__)
+    if meeting_date <= previous_meeting_date:
+        raise PredictionHistoryError(
+            "Target meeting must be later than the previous FOMC meeting."
+        )
+    data_probabilities = _data_probabilities(macro_bias, previous_decision)
+    data_decision = max(data_probabilities, key=data_probabilities.__getitem__)
+    market_decision = max(market_probabilities, key=market_probabilities.__getitem__)
 
     snapshot_time = captured_at or datetime.now(timezone.utc).isoformat()
     return {
         "captured_at": snapshot_time,
         "target_meeting": meeting_date.isoformat(),
         "model_version": MODEL_VERSION,
-        "decision": decision,
-        "confidence": round(probabilities[decision], 6),
-        "bias": round(bias, 6),
-        "probabilities": {key: round(value, 6) for key, value in probabilities.items()},
+        "decision": data_decision,
+        "confidence": round(data_probabilities[data_decision], 6),
+        "bias": round(macro_bias, 6),
+        "probabilities": {key: round(value, 6) for key, value in data_probabilities.items()},
+        "market_prediction": {
+            "decision": market_decision,
+            "confidence": round(market_probabilities[market_decision], 6),
+            "probabilities": {key: round(value, 6) for key, value in market_probabilities.items()},
+        },
     }
 
 

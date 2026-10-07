@@ -62,6 +62,12 @@
       border-radius: 18px;
       background: linear-gradient(135deg, rgba(141, 200, 255, 0.14), rgba(255, 255, 255, 0.04));
       border: 1px solid rgba(141, 200, 255, 0.2);
+    }
+
+    .prediction-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
       margin-top: 8px;
     }
 
@@ -422,6 +428,9 @@
       .heat-map {
         grid-template-columns: 1fr;
       }
+      .prediction-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .year-tabs,
@@ -671,14 +680,25 @@
       <div class="eyebrow">WhatTheFed</div>
       <h1>Next Meeting Heat Map</h1>
       <p id="summary" class="note"></p>
-      <div class="prediction-card">
-        <div class="prediction-row">
-          <h2 id="prediction-title"></h2>
-          <span id="confidence" class="pill"></span>
+      <div class="prediction-grid">
+        <div class="prediction-card">
+          <div class="eyebrow">What the market says</div>
+          <div class="prediction-row">
+            <h2 id="market-prediction-title"></h2>
+            <span id="market-confidence" class="pill"></span>
+          </div>
+          <p id="market-rationale" class="note"></p>
         </div>
-        <p id="rationale" class="note"></p>
-        <div id="sources" class="source-list"></div>
+        <div class="prediction-card">
+          <div class="eyebrow">What the data says</div>
+          <div class="prediction-row">
+            <h2 id="data-prediction-title"></h2>
+            <span id="data-confidence" class="pill"></span>
+          </div>
+          <p id="data-rationale" class="note"></p>
+        </div>
       </div>
+      <div id="sources" class="source-list"></div>
     </section>
 
     <section class="section">
@@ -710,7 +730,7 @@
       <div class="eyebrow">Data Visualization</div>
       <div class="viz-tabs">
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
-        <button class="viz-tab" data-viz="model-history">Model Probability History</button>
+        <button class="viz-tab" data-viz="model-history">Data Probability History</button>
         <button class="viz-tab" data-viz="knowledge-graph">Signal Knowledge Graph</button>
         <button class="viz-tab" data-viz="raw-data">Raw Data</button>
         <button class="viz-tab" data-viz="experiment-details">Experiment Details</button>
@@ -723,7 +743,7 @@
           <div>
             <h3>How the forecast changes before each decision</h3>
             <p id="model-history-summary" class="note">
-              Each point is the complete all-data model from a successful dashboard refresh.
+              Each point is the macro-data model from a successful dashboard refresh.
             </p>
           </div>
           <label class="model-history-picker">
@@ -767,8 +787,8 @@
             and <strong>+1</strong> means pressure toward a raise.
           </p>
           <p class="note">
-            The shared headline model combines 45% market bias with 55% policy-model bias.
-            The policy model blends prior-meeting carry-over with the weighted macro signals.
+            The headline keeps market pricing separate from the macro-data model.
+            A recent rate move only adds a small wait-and-see adjustment to the data forecast.
           </p>
         </div>
         <div class="experiment-details-grid">
@@ -849,7 +869,7 @@
             <p>Raw series flow into domains, and each domain splits toward raise, hold, or cut according to its normalized bias.</p>
             <ul>
               <li><strong>Flow thickness:</strong> source relevance multiplied by its directional share.</li>
-              <li><strong>Outcome size:</strong> probabilities from the shared all-data model.</li>
+              <li><strong>Outcome size:</strong> probabilities from the macro-data model.</li>
               <li><strong>Use it for:</strong> tracing how evidence is compressed into a decision.</li>
               <li><strong>Watch out:</strong> flows explain the model; they do not prove the Fed uses this formula.</li>
             </ul>
@@ -860,7 +880,7 @@
             <span class="experiment-number">Experiment 7</span>
             <h3>Monte Carlo Cloud</h3>
             <h4>ELI5: Replay the meeting 520 times with plausible surprises.</h4>
-            <p>Each replay nudges markets, all eight macro domains, and carry-over using variability measured from their historical bias changes.</p>
+            <p>Each replay nudges all eight macro domains using variability measured from their historical bias changes.</p>
             <ul>
               <li><strong>Each dot:</strong> one shocked scenario and one sampled decision.</li>
               <li><strong>Bars:</strong> the share of scenarios ending in raise, hold, or cut.</li>
@@ -1045,7 +1065,7 @@
         cut: parsed.cut / total,
       };
     };
-    const decisionModel = (() => {
+    const dataDecisionModel = (() => {
       const macroWeights = Object.freeze({
         cpi: 0.24,
         ppi: 0.12,
@@ -1056,8 +1076,10 @@
         policyRate: 0.05,
         fiscal: 0.04,
       });
-      const ensembleWeights = Object.freeze({ market: 0.45, policy: 0.55 });
       const holdUtility = 0.30;
+      const dataTemperature = 2.40;
+      const recentActionHoldBoost = 0.10;
+      const recentActionReversalPenalty = 0.05;
       const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
       function blendMacro(inputs) {
@@ -1074,6 +1096,10 @@
       function probabilitiesFromBias(bias, confidence) {
         const temperature = 1.6 + 2.4 * clamp(confidence, 0, 1);
         const utilities = { raise: bias, hold: holdUtility, cut: -bias };
+        return probabilitiesFromUtilities(utilities, temperature);
+      }
+
+      function probabilitiesFromUtilities(utilities, temperature) {
         const weights = Object.fromEntries(
           Object.entries(utilities).map(([key, value]) => [key, Math.exp(value * temperature)]),
         );
@@ -1081,28 +1107,33 @@
         return { raise: weights.raise / total, hold: weights.hold / total, cut: weights.cut / total };
       }
 
-      function evaluate({ marketBias, previousBias, carry, macroInputs, confidence }) {
+      function evaluate({ macroInputs, previousDecision }) {
         const macroBias = blendMacro(macroInputs);
-        const boundedCarry = clamp(carry, 0, 1);
-        const policyBias = clamp(
-          previousBias * boundedCarry + macroBias * (1 - boundedCarry),
-          -1,
-          1,
-        );
-        const bias = clamp(
-          ensembleWeights.market * marketBias + ensembleWeights.policy * policyBias,
-          -1,
-          1,
-        );
-        const probabilities = probabilitiesFromBias(bias, confidence);
+        const utilities = { raise: macroBias, hold: holdUtility, cut: -macroBias };
+        if (previousDecision === "raise") {
+          utilities.hold += recentActionHoldBoost;
+          utilities.cut -= recentActionReversalPenalty;
+        } else if (previousDecision === "cut") {
+          utilities.hold += recentActionHoldBoost;
+          utilities.raise -= recentActionReversalPenalty;
+        }
+        const probabilities = probabilitiesFromUtilities(utilities, dataTemperature);
         const [decision, decisionConfidence] =
           Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0];
-        return { bias, macroBias, policyBias, probabilities, decision, confidence: decisionConfidence };
+        return { bias: macroBias, macroBias, utilities, probabilities, decision, confidence: decisionConfidence };
       }
 
-      return { macroWeights, ensembleWeights, holdUtility, blendMacro, probabilitiesFromBias, evaluate };
+      return {
+        macroWeights,
+        holdUtility,
+        recentActionHoldBoost,
+        recentActionReversalPenalty,
+        blendMacro,
+        probabilitiesFromBias,
+        evaluate,
+      };
     })();
-    window.__WTF_DECISION_MODEL__ = decisionModel;
+    window.__WTF_DATA_MODEL__ = dataDecisionModel;
 
     const formatPct = (value) => `${Math.round((value || 0) * 100)}%`;
     const formatMeetingDate = (value) => {
@@ -1124,7 +1155,7 @@
       return "cold";
     };
 
-    const allDataPrediction = (() => {
+    const marketPrediction = (() => {
       const marketProbabilities = normalizeTriplet(marketOverlay?.blended_probabilities);
       const marketTotal =
         marketProbabilities.raise + marketProbabilities.hold + marketProbabilities.cut;
@@ -1134,14 +1165,35 @@
       });
       const marketDataValid =
         Boolean(marketOverlay?.target_meeting) && marketTotal > 0 && !missingMarketProviders.length;
-      const marketConfidence = Math.max(
-        marketProbabilities.raise,
-        marketProbabilities.hold,
-        marketProbabilities.cut,
-      );
-      const priorSignal = (fomcOverlay?.signals || []).find((signal) =>
-        String(signal?.label || "").toLowerCase().includes("bias"));
-      const previousBias = Number(priorSignal?.display);
+      if (!marketDataValid) {
+        const missing = [
+          ...(!marketDataValid ? ["prediction markets"] : []),
+          ...missingMarketProviders.map((provider) => `${provider} market`),
+        ];
+        console.error("Market prediction unavailable.", { missing });
+        return {
+          decision: "?",
+          confidence: null,
+          probabilities: null,
+          error: true,
+          rationale: `Prediction unavailable: missing or invalid ${[...new Set(missing)].join(", ")} data.`,
+        };
+      }
+      const [decision, confidence] =
+        Object.entries(marketProbabilities).sort((a, b) => b[1] - a[1])[0];
+      return {
+        decision,
+        confidence,
+        probabilities: marketProbabilities,
+        error: false,
+        rationale:
+          `Blended prediction-market pricing for ${formatMeetingDate(marketOverlay.target_meeting)}: ` +
+          `R ${formatPct(marketProbabilities.raise)}, H ${formatPct(marketProbabilities.hold)}, ` +
+          `C ${formatPct(marketProbabilities.cut)}.`,
+      };
+    })();
+
+    const dataPrediction = (() => {
       const pointByMaturity = (maturity) =>
         (treasuryOverlay?.points || []).find((point) => String(point?.maturity) === maturity);
       const y2 = Number(pointByMaturity("2Y")?.yield_pct);
@@ -1159,61 +1211,49 @@
       const missingInputs = Object.entries(macroInputs)
         .filter(([, value]) => !Number.isFinite(value))
         .map(([key]) => key);
-      if (
-        !marketDataValid
-        || !Number.isFinite(previousBias)
-        || !fomcOverlay?.meeting_date
-        || !marketOverlay?.target_meeting
-        || missingInputs.length
-      ) {
+      const previousDecision = String(fomcOverlay?.decision || "").toLowerCase();
+      const previousDecisionValid = ["raise", "hold", "cut"].includes(previousDecision);
+      const targetMeetingTime = Date.parse(String(marketOverlay?.target_meeting || ""));
+      const previousMeetingTime = Date.parse(String(fomcOverlay?.meeting_date || ""));
+      const meetingSequenceValid =
+        Number.isFinite(targetMeetingTime)
+        && Number.isFinite(previousMeetingTime)
+        && targetMeetingTime > previousMeetingTime;
+      if (!previousDecisionValid || !meetingSequenceValid || missingInputs.length) {
         const missing = [
-          ...(!marketDataValid ? ["prediction markets"] : []),
-          ...missingMarketProviders.map((provider) => `${provider} market`),
-          ...(!Number.isFinite(previousBias) || !fomcOverlay?.meeting_date ? ["FOMC bias"] : []),
+          ...(!previousDecisionValid ? ["previous FOMC decision"] : []),
+          ...(!meetingSequenceValid ? ["future target meeting after the previous FOMC decision"] : []),
           ...missingInputs,
         ];
-        console.error("All-data prediction unavailable.", { missing });
+        console.error("Data prediction unavailable.", { missing });
         return {
           decision: "?",
           confidence: null,
-          probabilityLabel: "model probability",
+          probabilities: null,
           error: true,
           rationale: `Prediction unavailable: missing or invalid ${[...new Set(missing)].join(", ")} data.`,
         };
       }
 
-      const daysToMeeting =
-        Math.abs(Date.parse(marketOverlay.target_meeting) - Date.parse(fomcOverlay.meeting_date)) / 86400000;
-      const expectedMonthlyReleases = Math.max(
-        1,
-        Math.round((Number.isFinite(daysToMeeting) ? daysToMeeting : 49) / 30),
-      );
-      const carry = Math.max(0.15, Math.min(0.9, 1 / (1 + expectedMonthlyReleases * 0.55)));
-      const marketBias = marketProbabilities.raise - marketProbabilities.cut;
-      const result = decisionModel.evaluate({
-        marketBias,
-        previousBias,
-        carry,
-        macroInputs,
-        confidence: marketConfidence,
-      });
-      const macroWeightText = Object.entries(decisionModel.macroWeights)
+      const result = dataDecisionModel.evaluate({ macroInputs, previousDecision });
+      const macroWeightText = Object.entries(dataDecisionModel.macroWeights)
         .map(([key, weight]) => {
           const labels = { policyRate: "policy rates", breakeven: "breakevens" };
           return `${labels[key] || key.toUpperCase()} ${Math.round(weight * 100)}%`;
         })
         .join(", ");
+      const actionContext = previousDecision === "hold"
+        ? "The previous hold adds no directional momentum."
+        : `The previous ${previousDecision} only boosts wait-and-see and mildly reduces an immediate reversal; it does not favor another ${previousDecision}.`;
       return {
         ...result,
-        probabilityLabel: "model probability",
+        error: false,
         rationale:
-          `All-data ensemble for the ${formatMeetingDate(marketOverlay.target_meeting)} FOMC meeting: ` +
+          `Macro-data model for the ${formatMeetingDate(marketOverlay?.target_meeting)} FOMC meeting: ` +
           `R ${formatPct(result.probabilities.raise)}, H ${formatPct(result.probabilities.hold)}, ` +
           `C ${formatPct(result.probabilities.cut)}. ` +
-          `Net bias ${result.bias >= 0 ? "+" : ""}${result.bias.toFixed(2)} = ` +
-          `45% markets + 55% policy model; policy model = ` +
-          `${Math.round(carry * 100)}% prior FOMC + ${Math.round((1 - carry) * 100)}% macro. ` +
-          `Hold prior utility ${decisionModel.holdUtility.toFixed(2)}. Macro weights: ${macroWeightText}.`,
+          `Macro bias ${result.macroBias >= 0 ? "+" : ""}${result.macroBias.toFixed(2)}. ` +
+          `${actionContext} Macro weights: ${macroWeightText}.`,
       };
     })();
 
@@ -1330,7 +1370,6 @@
       });
     })();
 
-    const activePrediction = allDataPrediction;
     const combinedHeatMap = [
       ...fomcHeatCards,
       ...cpiHeatCards,
@@ -1394,14 +1433,17 @@
 
     const nextMeetingDate = marketOverlay?.target_meeting || fomcOverlay?.meeting_date || "?";
     document.getElementById("summary").textContent =
-      `All-data model using FOMC, macro, Treasury, rates, and market signals. Next FOMC Meeting: ${nextMeetingDate}`;
-    document.getElementById("prediction-title").textContent =
-      `Predicted next move: ${String(activePrediction.decision).toUpperCase()}`;
-    document.getElementById("confidence").textContent =
-      activePrediction.error
-        ? `? ${activePrediction.probabilityLabel}`
-        : `${Math.round(Number(activePrediction.confidence) * 100)}% ${activePrediction.probabilityLabel}`;
-    document.getElementById("rationale").textContent = activePrediction.rationale;
+      `Independent market-pricing and macro-data forecasts. Next FOMC Meeting: ${nextMeetingDate}`;
+    document.getElementById("market-prediction-title").textContent =
+      `Predicted move: ${String(marketPrediction.decision).toUpperCase()}`;
+    document.getElementById("market-confidence").textContent =
+      marketPrediction.error ? "? market probability" : `${formatPct(marketPrediction.confidence)} market probability`;
+    document.getElementById("market-rationale").textContent = marketPrediction.rationale;
+    document.getElementById("data-prediction-title").textContent =
+      `Predicted move: ${String(dataPrediction.decision).toUpperCase()}`;
+    document.getElementById("data-confidence").textContent =
+      dataPrediction.error ? "? data probability" : `${formatPct(dataPrediction.confidence)} data probability`;
+    document.getElementById("data-rationale").textContent = dataPrediction.rationale;
 
     const sources = document.getElementById("sources");
     const sourceItems = new Set();
@@ -1723,7 +1765,8 @@
       const snapshots = Array.isArray(modelHistoryOverlay?.snapshots)
         ? modelHistoryOverlay.snapshots.filter((snapshot) => {
             const probabilities = snapshot?.probabilities;
-            return snapshot?.target_meeting
+            return String(snapshot?.model_version || "").startsWith("data-")
+              && snapshot?.target_meeting
               && snapshot?.captured_at
               && ["raise", "hold", "cut"].every((key) => Number.isFinite(Number(probabilities?.[key])));
           })
@@ -1736,8 +1779,8 @@
         picker.innerHTML = "";
         picker.disabled = true;
         empty.hidden = false;
-        empty.textContent = "No model probability snapshots are available yet. History begins after the next successful hosted refresh.";
-        summary.textContent = "Model history is unavailable; no substitute values are shown.";
+        empty.textContent = "No data-model probability snapshots are available yet. History begins after the next successful hosted refresh.";
+        summary.textContent = "Data-model history is unavailable; no substitute values are shown.";
         return;
       }
 
@@ -2382,7 +2425,7 @@
           camera: [0, 3.0, 16.5],
           target: [0, -0.4, 0],
           distance: [6, 36],
-          legend: `Layout: Monte Carlo scenario cloud. 520 seeded draws shock markets, all eight macro domains, and carry-over around the shared all-data ensemble; x = resulting bias, z = CPI shock, y = labor shock. ${BIAS_SCALE_BAR} colour = sampled decision. Bars = outcome frequency.`,
+          legend: `Layout: Monte Carlo scenario cloud. 520 seeded draws shock all eight macro domains around the data model; x = resulting bias, z = CPI shock, y = labor shock. ${BIAS_SCALE_BAR} colour = sampled decision. Bars = outcome frequency.`,
         },
         "experiment-8": {
           camera: [0, 2.4, 15.5],
@@ -2618,7 +2661,7 @@
       }
 
       function probabilitiesFromBias(bias, confidence) {
-        return window.__WTF_DECISION_MODEL__.probabilitiesFromBias(bias, confidence);
+        return window.__WTF_DATA_MODEL__.probabilitiesFromBias(bias, confidence);
       }
 
       function historicalMeetings() {
@@ -3508,10 +3551,10 @@
       // Direct inflation and labor readings dominate. Fiscal impulse and funding
       // conditions remain deliberately small because they affect the decision less
       // directly than observed prices, employment, and inflation expectations.
-      const MACRO_WEIGHTS = window.__WTF_DECISION_MODEL__.macroWeights;
+      const MACRO_WEIGHTS = window.__WTF_DATA_MODEL__.macroWeights;
 
       function blendMacro({ cpi, ppi, labor, gdp, breakeven, treasury, policyRate, fiscal }) {
-        return window.__WTF_DECISION_MODEL__.blendMacro({
+        return window.__WTF_DATA_MODEL__.blendMacro({
           cpi, ppi, labor, gdp, breakeven, treasury, policyRate, fiscal,
         });
       }
@@ -3525,15 +3568,9 @@
         const breakeven = overrides.breakeven ?? (context.breakevenBias || 0);
         const policyRate = overrides.policyRate ?? (context.policyRateBias || 0);
         const fiscal = overrides.fiscal ?? (context.fiscalBias || 0);
-        const market = overrides.market ?? context.marketBias;
-        const previous = overrides.previous ?? context.previousBias;
-        const carry = clamp(overrides.carry ?? (context.carryFromPrevious || 0.4), 0, 1);
-        const result = window.__WTF_DECISION_MODEL__.evaluate({
-          marketBias: market,
-          previousBias: previous,
-          carry,
+        const result = window.__WTF_DATA_MODEL__.evaluate({
           macroInputs: { cpi, ppi, labor, gdp, breakeven, treasury, policyRate, fiscal },
-          confidence: context.focus?.confidence ?? 0.45,
+          previousDecision: context.previous?.decision || "hold",
         });
         return { ...result, macro: result.macroBias };
       }
@@ -3558,28 +3595,6 @@
         };
 
         const domains = [
-          {
-            label: "FOMC Statement",
-            color: 0xffa657,
-            bias: context.previousBias,
-            weight: 1.0,
-            sources: (context.signals || []).map((signal) => ({
-              label: String(signal?.label || "Signal"),
-              weight: clamp(Number(signal?.score || 3) / 5, 0.2, 1),
-              count: Number(signal?.mentions || 0),
-            })),
-          },
-          {
-            label: "Markets",
-            color: 0x79c0ff,
-            bias: context.marketBias,
-            weight: 0.95,
-            sources: Object.entries(context.marketData?.providers || {}).map(([provider, payload]) => ({
-              label: provider,
-              weight: 0.8,
-              count: Object.keys(payload?.probabilities || {}).length,
-            })),
-          },
           { label: "CPI", color: 0xff7b72, bias: context.cpiBias, weight: 0.9, sources: groupCategories(context.cpiData?.latest_values, "cpi") },
           { label: "PPI", color: 0xf97583, bias: context.ppiBias || 0, weight: 0.65, sources: groupCategories(context.ppiData?.latest_values, "ppi") },
           { label: "Labor", color: 0x7bd389, bias: context.laborBias, weight: 0.85, sources: groupCategories(context.laborData?.latest_values, "labor") },
@@ -3776,8 +3791,6 @@
         const sigmaPolicyRate = sigmas.policyRate;
         const sigmaFiscal = sigmas.fiscal;
         const sigmaGdp = sigmas.gdp;
-        const sigmaMarket = sigmas.market;
-        const sigmaCarry = clamp(0.5 * (1 - (context.carryFromPrevious || 0.4)), 0.05, 0.3);
 
         const baseline = biasModel(context);
         const random = mulberry32(20260916);
@@ -3795,8 +3808,6 @@
           const policyRateShock = gaussian(random) * sigmaPolicyRate;
           const fiscalShock = gaussian(random) * sigmaFiscal;
           const gdpShock = gaussian(random) * sigmaGdp;
-          const marketShock = gaussian(random) * sigmaMarket;
-          const carryShock = gaussian(random) * sigmaCarry;
           const sample = biasModel(context, {
             cpi: clamp(context.cpiBias + cpiShock, -1, 1),
             ppi: clamp((context.ppiBias || 0) + ppiShock, -1, 1),
@@ -3806,8 +3817,6 @@
             policyRate: clamp((context.policyRateBias || 0) + policyRateShock, -1, 1),
             fiscal: clamp((context.fiscalBias || 0) + fiscalShock, -1, 1),
             gdp: clamp((context.gdpBias || 0) + gdpShock, -1, 1),
-            market: clamp(context.marketBias + marketShock, -1, 1),
-            carry: clamp((context.carryFromPrevious || 0.4) + carryShock, 0, 1),
           });
           biasSum += sample.bias;
 
@@ -3889,8 +3898,7 @@
             `y = labor shock (σ ${sigmaLabor.toFixed(3)} over ${sigmas.observations.labor} prints), ` +
             `PPI σ ${sigmaPpi.toFixed(3)} · curve σ ${sigmaTreasury.toFixed(3)} · ` +
             `GDP σ ${sigmaGdp.toFixed(3)} · breakeven σ ${sigmaBreakeven.toFixed(3)} · ` +
-            `funding σ ${sigmaPolicyRate.toFixed(3)} · fiscal σ ${sigmaFiscal.toFixed(3)} · ` +
-            `market disagreement σ ${sigmaMarket.toFixed(3)}`,
+            `funding σ ${sigmaPolicyRate.toFixed(3)} · fiscal σ ${sigmaFiscal.toFixed(3)}`,
         );
         addReferenceGrid(scene);
       }
@@ -3900,7 +3908,6 @@
         const step = 0.05;
 
         const inputs = [
-          { key: "market", label: "Market Net Bias", base: context.marketBias, color: 0x79c0ff, min: -1, max: 1 },
           { key: "cpi", label: "CPI Bias", base: context.cpiBias, color: 0xff7b72, min: -1, max: 1 },
           { key: "ppi", label: "PPI Bias", base: context.ppiBias || 0, color: 0xf97583, min: -1, max: 1 },
           { key: "labor", label: "Labor Bias", base: context.laborBias, color: 0x7bd389, min: -1, max: 1 },
@@ -3909,8 +3916,6 @@
           { key: "breakeven", label: "Breakeven Bias", base: context.breakevenBias || 0, color: 0xffa657, min: -1, max: 1 },
           { key: "policyRate", label: "Funding Stress", base: context.policyRateBias || 0, color: 0xd2a8ff, min: -1, max: 1 },
           { key: "fiscal", label: "Fiscal Impulse", base: context.fiscalBias || 0, color: 0xff9f43, min: -1, max: 1 },
-          { key: "previous", label: "Prior Meeting Bias", base: context.previousBias, color: 0xffa657, min: -1, max: 1 },
-          { key: "carry", label: "Carry-over", base: clamp(context.carryFromPrevious || 0.4, 0, 1), color: 0x79c0ff, min: 0, max: 1 },
         ];
 
         const rows = inputs.map((input) => {

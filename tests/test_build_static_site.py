@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import runpy
 import subprocess
 from pathlib import Path
@@ -73,6 +74,7 @@ def _complete_payloads() -> dict[str, object]:
             "blended_probabilities": {"raise": 0.55, "hold": 0.4, "cut": 0.05},
         },
         "fomc": {
+            "decision": "raise",
             "meeting_date": "2026-07-29",
             "signals": [{"label": "Previous Meeting Bias", "display": "+0.25"}],
         },
@@ -99,10 +101,35 @@ def test_prediction_snapshot_records_all_three_probabilities() -> None:
     )
 
     assert snapshot["target_meeting"] == "2026-09-16"
-    assert snapshot["decision"] == "raise"
-    assert snapshot["model_version"] == "all-data-v2"
+    assert snapshot["decision"] == "hold"
+    assert snapshot["model_version"] == "data-v1"
     assert sum(snapshot["probabilities"].values()) == pytest.approx(1.0, abs=0.000002)
-    assert snapshot["confidence"] == snapshot["probabilities"]["raise"]
+    assert snapshot["confidence"] == snapshot["probabilities"]["hold"]
+    assert snapshot["market_prediction"]["decision"] == "raise"
+    assert snapshot["market_prediction"]["probabilities"] == {
+        "raise": 0.55,
+        "hold": 0.4,
+        "cut": 0.05,
+    }
+
+
+def test_recent_hike_favors_wait_and_see_without_adding_raise_pressure() -> None:
+    after_hike = build_prediction_snapshot(_complete_payloads())
+    after_hold_payloads = deepcopy(_complete_payloads())
+    after_hold_payloads["fomc"]["decision"] = "hold"
+    after_hold = build_prediction_snapshot(after_hold_payloads)
+
+    assert after_hike["probabilities"]["hold"] > after_hold["probabilities"]["hold"]
+    assert after_hike["probabilities"]["cut"] < after_hold["probabilities"]["cut"]
+    assert after_hike["probabilities"]["raise"] < after_hold["probabilities"]["raise"]
+
+
+def test_prediction_snapshot_rejects_completed_target_meeting() -> None:
+    payloads = _complete_payloads()
+    payloads["fomc"]["meeting_date"] = payloads["market"]["target_meeting"]
+
+    with pytest.raises(PredictionHistoryError, match="later than"):
+        build_prediction_snapshot(payloads)
 
 
 def test_prediction_snapshot_requires_both_market_providers() -> None:
