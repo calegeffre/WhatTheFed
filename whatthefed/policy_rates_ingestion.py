@@ -503,7 +503,7 @@ def _load_rates_by_date(db_path: str | Path) -> dict[str, dict[str, dict[str, fl
 def build_policy_rate_bias_history(
     *,
     db_path: str | Path = DEFAULT_DB_PATH,
-    limit: int = 400,
+    limit: int = 2000,
 ) -> list[dict[str, object]]:
     """Daily funding-stress bias, oldest first, in the same units as the other domains."""
     by_date = _load_rates_by_date(db_path)

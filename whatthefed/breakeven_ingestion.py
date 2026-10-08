@@ -405,7 +405,7 @@ def build_breakeven_series(*, db_path: str | Path = DEFAULT_DB_PATH) -> dict[str
 def build_breakeven_bias_history(
     *,
     db_path: str | Path = DEFAULT_DB_PATH,
-    limit: int = 400,
+    limit: int = 2000,
 ) -> list[dict[str, object]]:
     """Daily breakeven-derived bias, oldest first, already in bias units."""
     breakevens = build_breakeven_series(db_path=db_path)

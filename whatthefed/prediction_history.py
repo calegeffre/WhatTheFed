@@ -93,6 +93,31 @@ def _data_probabilities(macro_bias: float, previous_decision: str) -> dict[str, 
     return {key: value / total for key, value in weights.items()}
 
 
+def calculate_data_prediction(
+    macro_inputs: Mapping[str, object],
+    previous_decision: str,
+) -> dict[str, object]:
+    missing = set(MACRO_WEIGHTS) - set(macro_inputs)
+    if missing:
+        raise PredictionHistoryError(f"Macro inputs are missing: {', '.join(sorted(missing))}.")
+    macro_bias = _clamp(
+        sum(
+            MACRO_WEIGHTS[key] * _clamp(_number(macro_inputs[key]), -1.0, 1.0)
+            for key in MACRO_WEIGHTS
+        ),
+        -1.0,
+        1.0,
+    )
+    probabilities = _data_probabilities(macro_bias, previous_decision)
+    decision = max(probabilities, key=probabilities.__getitem__)
+    return {
+        "decision": decision,
+        "confidence": probabilities[decision],
+        "macro_bias": macro_bias,
+        "probabilities": probabilities,
+    }
+
+
 def build_prediction_snapshot(
     payloads: Mapping[str, object],
     *,
@@ -140,20 +165,15 @@ def build_prediction_snapshot(
         "policyRate": _payload_metric(payloads.get("policy_rate"), "policy_rate_bias"),
         "fiscal": _payload_metric(payloads.get("fiscal"), "fiscal_bias"),
     }
-    macro_bias = _clamp(
-        sum(MACRO_WEIGHTS[key] * _clamp(value, -1.0, 1.0) for key, value in macro_inputs.items()),
-        -1.0,
-        1.0,
-    )
-
     meeting_date = _parse_date(market.get("target_meeting"), "Target meeting")
     previous_meeting_date = _parse_date(fomc.get("meeting_date"), "Previous FOMC meeting")
     if meeting_date <= previous_meeting_date:
         raise PredictionHistoryError(
             "Target meeting must be later than the previous FOMC meeting."
         )
-    data_probabilities = _data_probabilities(macro_bias, previous_decision)
-    data_decision = max(data_probabilities, key=data_probabilities.__getitem__)
+    data_prediction = calculate_data_prediction(macro_inputs, previous_decision)
+    data_probabilities = data_prediction["probabilities"]
+    data_decision = str(data_prediction["decision"])
     market_decision = max(market_probabilities, key=market_probabilities.__getitem__)
 
     snapshot_time = captured_at or datetime.now(timezone.utc).isoformat()
@@ -163,7 +183,7 @@ def build_prediction_snapshot(
         "model_version": MODEL_VERSION,
         "decision": data_decision,
         "confidence": round(data_probabilities[data_decision], 6),
-        "bias": round(macro_bias, 6),
+        "bias": round(float(data_prediction["macro_bias"]), 6),
         "probabilities": {key: round(value, 6) for key, value in data_probabilities.items()},
         "market_prediction": {
             "decision": market_decision,

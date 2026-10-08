@@ -24,10 +24,15 @@ from whatthefed.prediction_history import (
     load_dashboard_payloads,
     merge_history,
 )
+from whatthefed.backtest import build_backtest_payload, export_backtest_js, load_backtest_inputs
+from whatthefed.fed_history import export_history_js as export_fed_history_js
+from whatthefed.fed_history import fetch_history_payload
 
 EXPECTED_PAYLOADS = (
     "fomc_dashboard_data.js",
     "fomc_history_data.js",
+    "fed_rate_history_data.js",
+    "data_backtest_data.js",
     "market_dashboard_data.js",
     "cpi_dashboard_data.js",
     "kg_dashboard_data.js",
@@ -137,7 +142,7 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                 "whatthefed.cpi_ingestion",
                 [
                     "--db-path", str(db_path),
-                    "--start-year", str(current_year - 4),
+                    "--start-year", str(current_year - 7),
                     "--end-year", str(current_year),
                     "--dashboard-js", str(data_dir / "cpi_dashboard_data.js"),
                     "--kg-js", str(data_dir / "kg_dashboard_data.js"),
@@ -148,7 +153,7 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                 "whatthefed.labor_ingestion",
                 [
                     "--db-path", str(db_path),
-                    "--start-year", str(current_year - 4),
+                    "--start-year", str(current_year - 7),
                     "--end-year", str(current_year),
                     "--dashboard-js", str(data_dir / "labor_dashboard_data.js"),
                     "--kg-js", str(data_dir / "labor_kg_dashboard_data.js"),
@@ -159,7 +164,7 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                 "whatthefed.ppi_ingestion",
                 [
                     "--db-path", str(db_path),
-                    "--start-year", str(current_year - 4),
+                    "--start-year", str(current_year - 7),
                     "--end-year", str(current_year),
                     "--dashboard-js", str(data_dir / "ppi_dashboard_data.js"),
                 ],
@@ -169,7 +174,8 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                 "whatthefed.treasury_ingestion",
                 [
                     "--db-path", str(db_path),
-                    "--year", str(current_year),
+                    "--start-year", str(current_year - 6),
+                    "--end-year", str(current_year),
                     "--dashboard-js", str(data_dir / "treasury_dashboard_data.js"),
                 ],
             ),
@@ -178,7 +184,8 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                 "whatthefed.breakeven_ingestion",
                 [
                     "--db-path", str(db_path),
-                    "--year", str(current_year),
+                    "--start-year", str(current_year - 6),
+                    "--end-year", str(current_year),
                     "--dashboard-js", str(data_dir / "breakeven_dashboard_data.js"),
                 ],
             ),
@@ -187,7 +194,7 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                 "whatthefed.policy_rates_ingestion",
                 [
                     "--db-path", str(db_path),
-                    "--start-date", (today - timedelta(days=900)).isoformat(),
+                    "--start-date", (today - timedelta(days=365 * 6 + 2)).isoformat(),
                     "--end-date", today.isoformat(),
                     "--dashboard-js", str(data_dir / "policy_rate_dashboard_data.js"),
                 ],
@@ -197,7 +204,7 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
                 "whatthefed.fiscal_ingestion",
                 [
                     "--db-path", str(db_path),
-                    "--start-date", f"{current_year - 4}-01-01",
+                    "--start-date", f"{current_year - 7}-01-01",
                     "--dashboard-js", str(data_dir / "fiscal_dashboard_data.js"),
                 ],
             ),
@@ -224,6 +231,12 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
             print(f"::group::{label}", flush=True)
             run_ingestion_command(label=label, module=module, arguments=arguments)
             print("::endgroup::", flush=True)
+
+    fed_history = fetch_history_payload(start_year=1982)
+    export_fed_history_js(fed_history, data_dir / "fed_rate_history_data.js")
+    meetings, histories = load_backtest_inputs(data_dir)
+    backtest = build_backtest_payload(meetings=meetings, histories=histories, years=5, as_of=today)
+    export_backtest_js(backtest, data_dir / "data_backtest_data.js")
 
     snapshot = build_prediction_snapshot(load_dashboard_payloads(data_dir))
     history = merge_history(existing_history, snapshot)

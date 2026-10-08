@@ -468,7 +468,7 @@ def build_treasury_slope_history(
     db_path: str | Path = DEFAULT_DB_PATH,
     long_symbol: str = "UST10Y",
     short_symbol: str = "UST2Y",
-    limit: int = 400,
+    limit: int = 2000,
 ) -> list[dict[str, object]]:
     """Daily 10Y-2Y spread converted to bias units, oldest first.
 

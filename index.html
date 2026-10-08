@@ -436,8 +436,30 @@
     .year-tabs,
     .viz-tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin: 16px 0;
+    }
+
+    .range-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 12px;
+    }
+
+    .backtest-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .backtest-card {
+      padding: 14px;
+      border: 1px solid rgba(141, 200, 255, 0.14);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
     }
 
     .year-tab,
@@ -632,7 +654,12 @@
     }
     @media (max-width: 760px) {
       .kg-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .experiment-details-grid { grid-template-columns: 1fr; }
+      .experiment-details-grid {
+        grid-template-columns: 1fr;
+      }
+      .backtest-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       .viz-tabs { flex-wrap: wrap; }
       .model-history-header { display: grid; }
       .model-history-picker { min-width: 0; }
@@ -727,6 +754,13 @@
     </section>
 
     <section class="section">
+      <div class="eyebrow">Five-year data-model backtest</div>
+      <p id="backtest-summary" class="note"></p>
+      <div id="backtest-metrics" class="backtest-grid"></div>
+      <p id="backtest-limitations" class="note"></p>
+    </section>
+
+    <section class="section">
       <div class="eyebrow">Data Visualization</div>
       <div class="viz-tabs">
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
@@ -736,6 +770,7 @@
         <button class="viz-tab" data-viz="experiment-details">Experiment Details</button>
       </div>
       <div id="viz-panel-rate-timeline" class="viz-panel viz-panel-active">
+        <div id="rate-range-controls" class="range-controls"></div>
         <svg id="rate-chart" class="viz-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div id="viz-panel-model-history" class="viz-panel">
@@ -909,7 +944,7 @@
 
     <section class="section">
       <div class="eyebrow">Previous meeting history</div>
-      <p class="note">Each card links to the official Fed HTML statement and shows the decision, published tally, dissent context, and the same generic voter icons used in the latest-meeting view.</p>
+      <p class="note">Comparable target-rate decisions from 1982 onward. Select an individual year from 2020 onward or browse the complete 1980–2020 archive. Recent cards include published tallies and detailed voting context when available. For older records, changes compare the target aligned to each meeting or conference call with the prior recorded event so intermeeting moves remain visible.</p>
       <div id="year-tabs" class="year-tabs"></div>
       <div id="meeting-timeline" class="timeline-scroll"></div>
     </section>
@@ -918,6 +953,8 @@
   <script>
     window.__FOMC_DASHBOARD_DATA__ = window.__FOMC_DASHBOARD_DATA__ || null;
     window.__FOMC_HISTORY_DATA__ = window.__FOMC_HISTORY_DATA__ || null;
+    window.__FED_RATE_HISTORY_DATA__ = window.__FED_RATE_HISTORY_DATA__ || null;
+    window.__DATA_BACKTEST_DATA__ = window.__DATA_BACKTEST_DATA__ || null;
     window.__MARKET_DASHBOARD_DATA__ = window.__MARKET_DASHBOARD_DATA__ || null;
     window.__CPI_DASHBOARD_DATA__ = window.__CPI_DASHBOARD_DATA__ || null;
     window.__KG_DASHBOARD_DATA__ = window.__KG_DASHBOARD_DATA__ || null;
@@ -936,6 +973,8 @@
   </script>
   <script src="data/fomc_dashboard_data.js"></script>
   <script src="data/fomc_history_data.js"></script>
+  <script src="data/fed_rate_history_data.js"></script>
+  <script src="data/data_backtest_data.js"></script>
   <script src="data/market_dashboard_data.js"></script>
   <script src="data/cpi_dashboard_data.js"></script>
   <script src="data/kg_dashboard_data.js"></script>
@@ -1049,6 +1088,8 @@
     const gdpOverlay = window.__GDP_DASHBOARD_DATA__;
     const fedEventsOverlay = window.__FED_EVENTS_DASHBOARD_DATA__;
     const modelHistoryOverlay = window.__MODEL_PROBABILITY_HISTORY_DATA__;
+    const fedRateHistoryOverlay = window.__FED_RATE_HISTORY_DATA__;
+    const backtestOverlay = window.__DATA_BACKTEST_DATA__;
     const normalizeTriplet = (values) => {
       const parsed = {
         raise: Number(values?.raise || 0),
@@ -1498,6 +1539,35 @@
       heatMap.appendChild(card);
     });
 
+    const backtestSummary = document.getElementById("backtest-summary");
+    const backtestMetrics = document.getElementById("backtest-metrics");
+    const backtestLimitations = document.getElementById("backtest-limitations");
+    if (backtestOverlay?.meeting_count) {
+      backtestSummary.textContent =
+        `${backtestOverlay.coverage_start} through ${backtestOverlay.coverage_end}; ` +
+        `${backtestOverlay.meeting_count} meetings evaluated with observations available before each decision.`;
+      const metrics = [
+        ["Directional accuracy", formatPct(backtestOverlay.accuracy)],
+        ["Mean Brier score", Number(backtestOverlay.mean_brier_score).toFixed(3)],
+        ["Mean log loss", Number(backtestOverlay.mean_log_loss).toFixed(3)],
+        [
+          "Actual outcomes",
+          `R ${backtestOverlay.outcome_counts?.raise || 0} · H ${backtestOverlay.outcome_counts?.hold || 0} · C ${backtestOverlay.outcome_counts?.cut || 0}`,
+        ],
+      ];
+      backtestMetrics.innerHTML = metrics.map(([label, value]) => `
+        <article class="backtest-card">
+          <div class="eyebrow">${label}</div>
+          <div class="heat-score">${value}</div>
+        </article>
+      `).join("");
+      backtestLimitations.textContent = `Important: ${(backtestOverlay.limitations || []).join(" ")}`;
+    } else {
+      backtestSummary.textContent = "Backtest unavailable because complete lagged histories were not generated.";
+      backtestMetrics.innerHTML = "";
+      backtestLimitations.textContent = "";
+    }
+
     const voteConfig = {
       hold: { label: "Hold", fillClass: "fill-hold", dotClass: "dot-hold" },
       "hold-dissent": {
@@ -1513,25 +1583,41 @@
     const meetingTimeline = document.getElementById("meeting-timeline");
     const yearTabsEl = document.getElementById("year-tabs");
     const historyOverlay = window.__FOMC_HISTORY_DATA__;
-
-    const allMeetingsByYear = {};
-    if (historyOverlay) {
-      Object.entries(historyOverlay).forEach(([year, meetings]) => {
-        allMeetingsByYear[year] = { meetings };
-      });
-    }
-    const detailedMeetingUrls = new Set(dashboardData.meeting_history.map((meeting) => meeting.url));
-    const remaining2026Meetings = (historyOverlay?.["2026"] || []).filter(
-      (meeting) => !detailedMeetingUrls.has(meeting.source_url),
+    const recentMeetingByDate = new Map();
+    Object.values(historyOverlay || {}).forEach((meetings) => {
+      (meetings || []).forEach((meeting) => recentMeetingByDate.set(meeting.meeting_date, meeting));
+    });
+    const detailedMeetingByDate = new Map(
+      dashboardData.meeting_history.map((meeting) => {
+        const match = String(meeting.url || "").match(/monetary(\d{4})(\d{2})(\d{2})a\.htm/);
+        const meetingDate = match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+        return [meetingDate, meeting];
+      }),
     );
-    allMeetingsByYear["2026"] = {
-      meetings: [...dashboardData.meeting_history, ...remaining2026Meetings].sort(
-        (a, b) => Date.parse(b.meeting_date || b.date) - Date.parse(a.meeting_date || a.date),
-      ),
-    };
-
-    const availableYears = Object.keys(allMeetingsByYear).sort((a, b) => Number(b) - Number(a));
-    let activeYear = availableYears[0];
+    const allMeetings = (fedRateHistoryOverlay?.meetings || []).map((meeting) => ({
+      ...meeting,
+      ...(recentMeetingByDate.get(meeting.meeting_date) || {}),
+      detailed: detailedMeetingByDate.get(meeting.meeting_date) || null,
+    }));
+    const meetingsByYear = {};
+    allMeetings.forEach((meeting) => {
+      const year = Number(String(meeting.meeting_date).slice(0, 4));
+      (meetingsByYear[year] ||= []).push(meeting);
+    });
+    Object.values(meetingsByYear).forEach((meetings) =>
+      meetings.sort((a, b) => String(b.meeting_date).localeCompare(String(a.meeting_date))));
+    const recentYears = Object.keys(meetingsByYear)
+      .map(Number)
+      .filter((year) => year >= 2020)
+      .sort((a, b) => b - a);
+    const historyTabs = [
+      ...recentYears.map((year) => ({ key: String(year), label: String(year) })),
+      { key: "archive", label: "1980–2020" },
+    ];
+    const archivedMeetings = allMeetings
+      .filter((meeting) => Number(String(meeting.meeting_date).slice(0, 4)) <= 2020)
+      .sort((a, b) => String(b.meeting_date).localeCompare(String(a.meeting_date)));
+    let activeHistoryTab = historyTabs[0]?.key;
 
     function renderDbCard(meeting) {
       const card = document.createElement("article");
@@ -1539,6 +1625,13 @@
       const tallyChip = meeting.vote_tally
         ? `<span class="source-pill">Official vote: ${meeting.vote_tally}</span>`
         : "";
+      const targetLabel = Number(meeting.target_lower) === Number(meeting.target_upper)
+        ? `${Number(meeting.target_upper).toFixed(2)}%`
+        : `${Number(meeting.target_lower).toFixed(2)}–${Number(meeting.target_upper).toFixed(2)}%`;
+      const change = Number(meeting.change_bps || 0);
+      const changeChip = change
+        ? `<span class="source-pill">Change: ${change > 0 ? "+" : ""}${change} bp</span>`
+        : `<span class="source-pill">No rate change</span>`;
       card.innerHTML = `
         <div class="timeline-header">
           <div class="timeline-title">
@@ -1546,14 +1639,16 @@
             <h3>${meeting.label}</h3>
           </div>
           <div class="timeline-links">
-            <a class="pill" href="${meeting.source_url}" target="_blank" rel="noopener noreferrer">FOMC Statement</a>
+            <a class="pill" href="${meeting.source_url}" target="_blank" rel="noopener noreferrer">Official record</a>
           </div>
         </div>
         <div class="timeline-stats">
           <span class="pill">Decision: ${String(meeting.decision).toUpperCase()}</span>
+          <span class="source-pill">Target: ${targetLabel}</span>
+          ${changeChip}
           ${tallyChip}
         </div>
-        <p class="note">${meeting.summary || ""}</p>
+        ${meeting.summary ? `<p class="note">${meeting.summary}</p>` : ""}
       `;
       return card;
     }
@@ -1627,24 +1722,26 @@
 
     function renderTimeline() {
       meetingTimeline.innerHTML = "";
-      const yearData = allMeetingsByYear[activeYear];
-      if (!yearData) return;
-      yearData.meetings.forEach((meeting) => {
-        const card = Array.isArray(meeting.votes) ? renderFullCard(meeting) : renderDbCard(meeting);
+      const meetings = activeHistoryTab === "archive"
+        ? archivedMeetings
+        : meetingsByYear[activeHistoryTab];
+      if (!meetings) return;
+      meetings.forEach((meeting) => {
+        const card = meeting.detailed ? renderFullCard(meeting.detailed) : renderDbCard(meeting);
         meetingTimeline.appendChild(card);
       });
     }
 
     function renderTabs() {
-      yearTabsEl.innerHTML = availableYears
+      yearTabsEl.innerHTML = historyTabs
         .map(
-          (year) =>
-            `<button class="year-tab${year === activeYear ? " year-tab-active" : ""}" data-year="${year}">${year}</button>`
+          (tab) =>
+            `<button class="year-tab${tab.key === activeHistoryTab ? " year-tab-active" : ""}" data-history-tab="${tab.key}">${tab.label}</button>`
         )
         .join("");
       yearTabsEl.querySelectorAll(".year-tab").forEach((btn) => {
         btn.addEventListener("click", () => {
-          activeYear = btn.dataset.year;
+          activeHistoryTab = btn.dataset.historyTab;
           renderTabs();
           renderTimeline();
         });
@@ -1665,81 +1762,79 @@
     }
 
     // Rate history: [date, lower-bound %, upper-bound %, decision]
-    const RATE_HISTORY = [
-      ["2023-09-20", 5.25, 5.50, "hold"],
-      ["2023-11-01", 5.25, 5.50, "hold"],
-      ["2023-12-13", 5.25, 5.50, "hold"],
-      ["2024-01-31", 5.25, 5.50, "hold"],
-      ["2024-03-20", 5.25, 5.50, "hold"],
-      ["2024-05-01", 5.25, 5.50, "hold"],
-      ["2024-06-12", 5.25, 5.50, "hold"],
-      ["2024-07-31", 5.25, 5.50, "hold"],
-      ["2024-09-18", 4.75, 5.00, "cut"],
-      ["2024-11-07", 4.50, 4.75, "cut"],
-      ["2024-12-18", 4.25, 4.50, "cut"],
-      ["2025-01-29", 4.25, 4.50, "hold"],
-      ["2025-03-19", 4.25, 4.50, "hold"],
-      ["2025-05-07", 4.25, 4.50, "hold"],
-      ["2025-06-18", 4.25, 4.50, "hold"],
-      ["2025-07-30", 4.25, 4.50, "hold"],
-      ["2025-09-17", 4.00, 4.25, "cut"],
-      ["2025-10-29", 3.75, 4.00, "cut"],
-      ["2025-12-10", 3.50, 3.75, "cut"],
-      ["2026-01-28", 3.50, 3.75, "hold"],
-      ["2026-03-18", 3.50, 3.75, "hold"],
-      ["2026-04-29", 3.50, 3.75, "hold"],
-      ["2026-06-17", 3.50, 3.75, "hold"],
-      ["2026-07-29", 3.50, 3.75, "hold"],
-      ["2026-09-16", 3.75, 4.00, "raise"],
+    const RATE_HISTORY = (fedRateHistoryOverlay?.meetings || []).map((meeting) => [
+      meeting.meeting_date,
+      Number(meeting.target_lower),
+      Number(meeting.target_upper),
+      meeting.decision,
+    ]);
+    const rateRangeControls = document.getElementById("rate-range-controls");
+    const rateRangeOptions = [
+      ["5 years", 5],
+      ["10 years", 10],
+      ["20 years", 20],
+      ["30 years", 30],
+      ["All", null],
     ];
+    let activeRateYears = 5;
 
     function drawRateTimeline() {
       const svg = document.getElementById("rate-chart");
       if (!svg) return;
       svg.innerHTML = "";
+      if (!RATE_HISTORY.length) return;
 
       const VW = 800, VH = 260;
       const P = { t: 22, r: 24, b: 50, l: 54 };
       const CW = VW - P.l - P.r, CH = VH - P.t - P.b;
-      const minT = new Date(RATE_HISTORY[0][0]).getTime();
-      const maxT = new Date("2026-10-01").getTime();
-      const minR = 3.0, maxR = 5.75;
+      const latest = new Date(`${RATE_HISTORY.at(-1)[0]}T00:00:00Z`);
+      const cutoff = activeRateYears
+        ? Date.UTC(latest.getUTCFullYear() - activeRateYears, latest.getUTCMonth(), latest.getUTCDate())
+        : Number.NEGATIVE_INFINITY;
+      const visible = RATE_HISTORY.filter(([meetingDate]) => new Date(`${meetingDate}T00:00:00Z`).getTime() >= cutoff);
+      const minT = new Date(`${visible[0][0]}T00:00:00Z`).getTime();
+      const maxT = latest.getTime();
+      const rateValues = visible.flatMap(([, low, high]) => [low, high]);
+      const minR = Math.max(0, Math.floor((Math.min(...rateValues) - 0.25) * 2) / 2);
+      const maxR = Math.ceil((Math.max(...rateValues) + 0.25) * 2) / 2;
 
       const xS = (d) => P.l + ((new Date(d).getTime() - minT) / (maxT - minT)) * CW;
       const yS = (r) => P.t + ((maxR - r) / (maxR - minR)) * CH;
 
       // Horizontal grid lines + Y-axis labels
-      [3.5, 4.0, 4.5, 5.0, 5.5].forEach((r) => {
+      for (let r = minR; r <= maxR + 0.001; r += 0.5) {
         svg.appendChild(svgEl("line", { x1: P.l, y1: yS(r), x2: P.l + CW, y2: yS(r), stroke: "rgba(141,200,255,0.08)", "stroke-width": 1 }));
         svg.appendChild(svgEl("text", { x: P.l - 6, y: yS(r) + 4, "text-anchor": "end", fill: "rgba(200,210,225,0.45)", "font-size": 10 }, r.toFixed(2) + "%"));
-      });
+      }
 
       // Build upper step path then polygon with lower path reversed (rate band fill)
-      const xEnd = xS("2026-10-01");
-      let upper = `M ${xS(RATE_HISTORY[0][0])},${yS(RATE_HISTORY[0][2])}`;
-      for (let i = 1; i < RATE_HISTORY.length; i++) upper += ` H ${xS(RATE_HISTORY[i][0])} V ${yS(RATE_HISTORY[i][2])}`;
+      const xEnd = xS(latest);
+      let upper = `M ${xS(visible[0][0])},${yS(visible[0][2])}`;
+      for (let i = 1; i < visible.length; i++) upper += ` H ${xS(visible[i][0])} V ${yS(visible[i][2])}`;
       upper += ` H ${xEnd}`;
 
-      let lowerRev = ` V ${yS(RATE_HISTORY.at(-1)[1])} H ${xS(RATE_HISTORY.at(-1)[0])}`;
-      for (let i = RATE_HISTORY.length - 2; i >= 0; i--) lowerRev += ` V ${yS(RATE_HISTORY[i][1])} H ${xS(RATE_HISTORY[i][0])}`;
+      let lowerRev = ` V ${yS(visible.at(-1)[1])} H ${xS(visible.at(-1)[0])}`;
+      for (let i = visible.length - 2; i >= 0; i--) lowerRev += ` V ${yS(visible[i][1])} H ${xS(visible[i][0])}`;
       lowerRev += " Z";
 
       svg.appendChild(svgEl("path", { d: upper + lowerRev, fill: "rgba(141,200,255,0.09)", stroke: "none" }));
       svg.appendChild(svgEl("path", { d: upper, fill: "none", stroke: "#8dc8ff", "stroke-width": 2 }));
 
-      let lower = `M ${xS(RATE_HISTORY[0][0])},${yS(RATE_HISTORY[0][1])}`;
-      for (let i = 1; i < RATE_HISTORY.length; i++) lower += ` H ${xS(RATE_HISTORY[i][0])} V ${yS(RATE_HISTORY[i][1])}`;
+      let lower = `M ${xS(visible[0][0])},${yS(visible[0][1])}`;
+      for (let i = 1; i < visible.length; i++) lower += ` H ${xS(visible[i][0])} V ${yS(visible[i][1])}`;
       lower += ` H ${xEnd}`;
       svg.appendChild(svgEl("path", { d: lower, fill: "none", stroke: "rgba(141,200,255,0.35)", "stroke-width": 1.5, "stroke-dasharray": "3 3" }));
 
       // Decision dots
       const DOT_COLOR = { hold: "#8b949e", cut: "#58a6ff", raise: "#ff7b72" };
-      RATE_HISTORY.forEach(([d, , hi, dec]) => {
+      visible.forEach(([d, , hi, dec]) => {
         svg.appendChild(svgEl("circle", { cx: xS(d), cy: yS(hi), r: 4.5, fill: DOT_COLOR[dec] || "#8dc8ff", stroke: "#0d1117", "stroke-width": 1.5 }));
       });
 
       // Year divider lines + labels
-      ["2024", "2025", "2026"].forEach((y) => {
+      const years = [...new Set(visible.map(([d]) => d.slice(0, 4)))];
+      const yearStep = Math.max(1, Math.ceil(years.length / 8));
+      years.filter((_, index) => index % yearStep === 0 || index === years.length - 1).forEach((y) => {
         const xPos = xS(y + "-01-01");
         svg.appendChild(svgEl("line", { x1: xPos, y1: P.t, x2: xPos, y2: P.t + CH, stroke: "rgba(141,200,255,0.1)", "stroke-width": 1, "stroke-dasharray": "4 4" }));
         svg.appendChild(svgEl("text", { x: xPos, y: P.t + CH + 16, "text-anchor": "middle", fill: "rgba(200,210,225,0.5)", "font-size": 11 }, y));
@@ -1754,6 +1849,19 @@
       });
       svg.appendChild(svgEl("text", { x: -(P.t + CH / 2), y: 13, transform: "rotate(-90)", "text-anchor": "middle", fill: "rgba(200,210,225,0.35)", "font-size": 10 }, "Fed Funds Rate"));
     }
+    function renderRateRangeControls() {
+      rateRangeControls.innerHTML = rateRangeOptions.map(([label, years]) => `
+        <button class="year-tab${years === activeRateYears ? " year-tab-active" : ""}" data-years="${years ?? "all"}">${label}</button>
+      `).join("");
+      rateRangeControls.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => {
+          activeRateYears = button.dataset.years === "all" ? null : Number(button.dataset.years);
+          renderRateRangeControls();
+          drawRateTimeline();
+        });
+      });
+    }
+    renderRateRangeControls();
 
     function drawModelProbabilityHistory() {
       const svg = document.getElementById("model-history-chart");
