@@ -1,7 +1,9 @@
 from datetime import date
+from unittest.mock import MagicMock, call, patch
 
 from whatthefed.fed_history import (
     TargetObservation,
+    _fetch_text,
     build_history_payload,
     parse_current_statement_meetings,
     parse_historical_meeting_dates,
@@ -51,6 +53,44 @@ def test_parse_target_csv_supports_scalar_and_range_targets() -> None:
         TargetObservation(date(2008, 12, 15), 1.0, 1.0),
         TargetObservation(date(2008, 12, 16), 0.0, 0.25),
     ]
+
+
+def test_fetch_text_retries_after_timeout() -> None:
+    timed_out_response = MagicMock()
+    timed_out_response.__enter__.return_value.read.side_effect = TimeoutError("read timed out")
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = b"history"
+
+    with (
+        patch(
+            "whatthefed.fed_history.urlopen",
+            side_effect=[timed_out_response, response],
+        ) as urlopen,
+        patch("whatthefed.fed_history.time.sleep") as sleep,
+    ):
+        assert _fetch_text("https://example.test/history") == "history"
+
+    assert urlopen.call_count == 2
+    assert sleep.call_args_list == [call(5)]
+
+
+def test_fetch_text_raises_after_retry_limit() -> None:
+    with (
+        patch(
+            "whatthefed.fed_history.urlopen",
+            side_effect=TimeoutError("read timed out"),
+        ) as urlopen,
+        patch("whatthefed.fed_history.time.sleep") as sleep,
+    ):
+        try:
+            _fetch_text("https://example.test/history")
+        except TimeoutError:
+            pass
+        else:
+            raise AssertionError("Expected the final timeout to be raised.")
+
+    assert urlopen.call_count == 3
+    assert sleep.call_args_list == [call(5), call(15)]
 
 
 def test_build_history_uses_first_post_meeting_effective_target() -> None:

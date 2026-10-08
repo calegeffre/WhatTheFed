@@ -8,6 +8,7 @@ import html
 import io
 import json
 import re
+import time
 from bisect import bisect_right
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -22,6 +23,7 @@ FRED_TARGET_URL = (
     "https://fred.stlouisfed.org/graph/fredgraph.csv"
     "?id=DFEDTAR,DFEDTARL,DFEDTARU&cosd=1982-01-01"
 )
+FETCH_RETRY_DELAYS_SECONDS = (5, 15)
 H5_RE = re.compile(r"<h5[^>]*>(.*?)</h5>", re.IGNORECASE | re.DOTALL)
 STATEMENT_RE = re.compile(
     r"<strong>\s*Statement:\s*</strong>.{0,500}?"
@@ -207,8 +209,15 @@ def main(argv: list[str] | None = None) -> int:
 
 def _fetch_text(url: str) -> str:
     request = Request(url, headers={"User-Agent": "WhatTheFed/1.0"})
-    with urlopen(request, timeout=30) as response:
-        return response.read().decode("utf-8", errors="replace")
+    for attempt in range(len(FETCH_RETRY_DELAYS_SECONDS) + 1):
+        try:
+            with urlopen(request, timeout=30) as response:
+                return response.read().decode("utf-8", errors="replace")
+        except TimeoutError:
+            if attempt == len(FETCH_RETRY_DELAYS_SECONDS):
+                raise
+            time.sleep(FETCH_RETRY_DELAYS_SECONDS[attempt])
+    raise AssertionError("Unreachable")
 
 
 def _float_or_none(value: object) -> float | None:
