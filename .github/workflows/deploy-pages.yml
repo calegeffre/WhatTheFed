@@ -15,6 +15,11 @@ on:
     - cron: "30 15 * * *"
     - cron: "30 23 * * 1-5"
   workflow_dispatch:
+    inputs:
+      refresh_backtest:
+        description: Recalculate the model backtest during this deployment
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,10 +42,18 @@ jobs:
           python-version: "3.12"
 
       - name: Build static dashboard
-        run: >-
-          python scripts/build-static-site.py
-          --output-dir _site
-          --history-source-url https://calegeffre.github.io/WhatTheFed/data/model_probability_history_data.js
+        env:
+          REFRESH_BACKTEST: ${{ inputs.refresh_backtest }}
+        run: |
+          args=()
+          if [[ "$REFRESH_BACKTEST" == "true" ]]; then
+            args+=(--refresh-backtest)
+          fi
+          python scripts/build-static-site.py \
+            --output-dir _site \
+            --history-source-url https://calegeffre.github.io/WhatTheFed/data/model_probability_history_data.js \
+            --backtest-source-url https://calegeffre.github.io/WhatTheFed/data/data_backtest_data.js \
+            "${args[@]}"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

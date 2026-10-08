@@ -24,6 +24,7 @@ FRED_TARGET_URL = (
     "?id=DFEDTAR,DFEDTARL,DFEDTARU&cosd=1982-01-01"
 )
 FETCH_RETRY_DELAYS_SECONDS = (5, 15)
+FRED_TARGET_FETCH_TIMEOUT_SECONDS = 120
 H5_RE = re.compile(r"<h5[^>]*>(.*?)</h5>", re.IGNORECASE | re.DOTALL)
 STATEMENT_RE = re.compile(
     r"<strong>\s*Statement:\s*</strong>.{0,500}?"
@@ -182,7 +183,12 @@ def fetch_history_payload(*, start_year: int = 1982) -> dict[str, object]:
         for meeting_date in parse_historical_meeting_dates(page_html):
             meeting_sources[meeting_date] = url
     meeting_sources.update(current_sources)
-    return build_history_payload(meeting_sources, parse_target_csv(_fetch_text(FRED_TARGET_URL)))
+    return build_history_payload(
+        meeting_sources,
+        parse_target_csv(
+            _fetch_text(FRED_TARGET_URL, timeout=FRED_TARGET_FETCH_TIMEOUT_SECONDS)
+        ),
+    )
 
 
 def export_history_js(payload: dict[str, object], output_path: str | Path) -> None:
@@ -207,11 +213,11 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _fetch_text(url: str) -> str:
+def _fetch_text(url: str, *, timeout: int = 30) -> str:
     request = Request(url, headers={"User-Agent": "WhatTheFed/1.0"})
     for attempt in range(len(FETCH_RETRY_DELAYS_SECONDS) + 1):
         try:
-            with urlopen(request, timeout=30) as response:
+            with urlopen(request, timeout=timeout) as response:
                 return response.read().decode("utf-8", errors="replace")
         except TimeoutError:
             if attempt == len(FETCH_RETRY_DELAYS_SECONDS):
