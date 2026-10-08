@@ -271,7 +271,7 @@
     }
 
     .timeline-scroll {
-      max-height: 980px;
+      max-height: 680px;
       overflow-y: auto;
       display: grid;
       gap: 18px;
@@ -377,19 +377,43 @@
 
     .timeline-votes-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(120px, 1fr));
-      gap: 12px;
-      margin-top: 16px;
+      grid-template-columns: repeat(6, minmax(80px, 1fr));
+      gap: 6px;
+      margin-top: 10px;
     }
 
     .timeline-voter-card {
-      padding: 12px;
+      padding: 6px;
+      border-radius: 12px;
+    }
+
+    .timeline-voter-card .avatar {
+      width: 28px;
+      height: 28px;
+      margin: 0 auto 4px;
+    }
+
+    .timeline-voter-card .avatar::before {
+      width: 16px;
+      height: 16px;
+    }
+
+    .timeline-voter-card .avatar::after {
+      width: 23px;
+      height: 13px;
+      border-radius: 10px 10px 6px 6px;
     }
 
     .timeline-voter-card h4 {
-      margin: 0 0 8px;
-      font-size: 13px;
+      margin: 0 0 3px;
+      font-size: 11px;
       font-weight: 600;
+    }
+
+    .timeline-voter-card .vote-tag {
+      margin-top: 2px;
+      padding: 3px 6px;
+      font-size: 10px;
     }
 
     .fill-hold,
@@ -420,11 +444,14 @@
 
     @media (max-width: 920px) {
       .timeline-votes-grid {
-        grid-template-columns: repeat(2, minmax(120px, 1fr));
+        grid-template-columns: repeat(4, minmax(80px, 1fr));
       }
     }
 
     @media (max-width: 600px) {
+      .timeline-votes-grid {
+        grid-template-columns: repeat(3, minmax(72px, 1fr));
+      }
       .heat-map {
         grid-template-columns: 1fr;
       }
@@ -754,13 +781,6 @@
     </section>
 
     <section class="section">
-      <div class="eyebrow">Five-year data-model backtest</div>
-      <p id="backtest-summary" class="note"></p>
-      <div id="backtest-metrics" class="backtest-grid"></div>
-      <p id="backtest-limitations" class="note"></p>
-    </section>
-
-    <section class="section">
       <div class="eyebrow">Data Visualization</div>
       <div class="viz-tabs">
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
@@ -947,6 +967,13 @@
       <p class="note">Comparable target-rate decisions from 1982 onward. Select an individual year from 2020 onward or browse the complete 1980–2020 archive. Recent cards include published tallies and detailed voting context when available. For older records, changes compare the target aligned to each meeting or conference call with the prior recorded event so intermeeting moves remain visible.</p>
       <div id="year-tabs" class="year-tabs"></div>
       <div id="meeting-timeline" class="timeline-scroll"></div>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">Five-year data-model backtest</div>
+      <p id="backtest-summary" class="note"></p>
+      <div id="backtest-metrics" class="backtest-grid"></div>
+      <p id="backtest-limitations" class="note"></p>
     </section>
   </main>
 
@@ -1770,6 +1797,7 @@
     ]);
     const rateRangeControls = document.getElementById("rate-range-controls");
     const rateRangeOptions = [
+      ["2 years", 2],
       ["5 years", 5],
       ["10 years", 10],
       ["20 years", 20],
