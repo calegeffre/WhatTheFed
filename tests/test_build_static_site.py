@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 import runpy
 import subprocess
+from urllib.error import HTTPError
 from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, call, patch
@@ -107,6 +109,129 @@ def test_fetch_existing_backtest_parses_deployed_payload() -> None:
 
     assert payload == {"meetings": [{"meeting_date": "2026-09-16"}]}
     urlopen.assert_called_once()
+
+
+@pytest.mark.parametrize("status", [404, 500])
+def test_fetch_existing_fed_history_http_errors(status: int) -> None:
+    namespace = _script_namespace()
+    fetch = namespace["fetch_existing_meetings"]
+    error = HTTPError("https://example.test/history.js", status, "error", {}, None)
+    with patch.dict(fetch.__globals__, {"urlopen": Mock(side_effect=error)}):
+        if status == 404:
+            assert fetch(error.url, "__FED_RATE_HISTORY_DATA__") is None
+        else:
+            with pytest.raises(HTTPError):
+                fetch(error.url, "__FED_RATE_HISTORY_DATA__")
+
+
+@pytest.mark.parametrize("text", [
+    'window.__FED_RATE_HISTORY_DATA__ = {"meetings": []};',
+    'window.__WRONG_DATA__ = {"meetings": []};',
+    'window.__FED_RATE_HISTORY_DATA__ = {"meetings": null};',
+])
+def test_fetch_existing_fed_history_validates_payload(text: str) -> None:
+    namespace = _script_namespace()
+    fetch = namespace["fetch_existing_meetings"]
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = text.encode()
+    with patch.dict(fetch.__globals__, {"urlopen": Mock(return_value=response)}):
+        if "__WRONG_DATA__" in text or "null" in text:
+            with pytest.raises(RuntimeError):
+                fetch("https://example.test/history.js", "__FED_RATE_HISTORY_DATA__")
+        else:
+            assert fetch("https://example.test/history.js", "__FED_RATE_HISTORY_DATA__") == {
+                "meetings": []
+            }
+
+
+@pytest.mark.parametrize(
+    ("cached_history", "cached_backtest", "refresh"),
+    [
+        ({"meetings": [{"meeting_date": "2026-09-16"}]}, {"meetings": []}, False),
+        (None, None, False),
+        ({"meetings": []}, None, False),
+        (None, {"meetings": [{"meeting_date": "2026-09-16"}]}, False),
+        (None, None, True),
+    ],
+)
+def test_build_site_only_fetches_fred_on_explicit_refresh(
+    tmp_path: Path,
+    cached_history: dict[str, object] | None,
+    cached_backtest: dict[str, object] | None,
+    refresh: bool,
+) -> None:
+    namespace = _script_namespace()
+    build_site = namespace["build_site"]
+    # Use a disposable repository root so the complete artifact can be checked.
+    (tmp_path / "index.html").write_text("<html></html>")
+    output_dir = tmp_path / "_site"
+    fresh_history = {"meetings": [{"meeting_date": "2026-09-16"}]}
+    fetch_fred = Mock(return_value=fresh_history)
+    fetch_cached = Mock(return_value=cached_history)
+    resolver = Mock(return_value=cached_backtest or {"meetings": []})
+
+    def ingest(*, label: str, module: str, arguments: list[str]) -> None:
+        for index, argument in enumerate(arguments):
+            if argument in {"--dashboard-js", "--history-js", "--kg-js"}:
+                Path(arguments[index + 1]).write_text("window.__TEST_DATA__ = {};")
+
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path,
+        "fetch_existing_history": Mock(return_value={"snapshots": []}),
+        "fetch_existing_backtest": Mock(return_value=cached_backtest),
+        "fetch_existing_meetings": fetch_cached,
+        "fetch_history_payload": fetch_fred,
+        "run_ingestion_command": ingest,
+        "resolve_backtest_payload": resolver,
+        "load_dashboard_payloads": Mock(return_value={}),
+        "build_prediction_snapshot": Mock(return_value={"captured_at": "2026-09-01"}),
+    }):
+        build_site(
+            output_dir=output_dir,
+            fed_history_source_url="https://example.test/history.js",
+            refresh_fed_history=refresh,
+        )
+
+    if refresh:
+        fetch_fred.assert_called_once_with(start_year=1982)
+        fetch_cached.assert_not_called()
+    else:
+        fetch_fred.assert_not_called()
+        fetch_cached.assert_called_once()
+    if cached_backtest is not None or (cached_history and cached_history["meetings"]) or refresh:
+        resolver.assert_called_once()
+    else:
+        resolver.assert_not_called()
+    text = (output_dir / "data" / "fed_rate_history_data.js").read_text()
+    assert json.loads(text.split(" = ", 1)[1].rstrip(";\n")) == (
+        fresh_history if refresh else cached_history or {"meetings": []}
+    )
+    assert all((output_dir / "data" / name).is_file() for name in namespace["EXPECTED_PAYLOADS"])
+    assert (output_dir / "index.html").is_file()
+    assert not list(output_dir.rglob("*.db"))
+
+
+def test_explicit_fed_history_refresh_failure_stops_build(tmp_path: Path) -> None:
+    build_site = _script_namespace()["build_site"]
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path,
+        "fetch_history_payload": Mock(side_effect=TimeoutError("FRED timed out")),
+    }):
+        with pytest.raises(TimeoutError, match="FRED timed out"):
+            build_site(output_dir=tmp_path / "_site", refresh_fed_history=True)
+    assert not (tmp_path / "_site").exists()
+
+
+def test_cli_passes_fed_history_options() -> None:
+    main = _script_namespace()["main"]
+    build_site = Mock()
+    with patch.dict(main.__globals__, {"build_site": build_site}):
+        assert main([
+            "--fed-history-source-url", "https://example.test/history.js",
+            "--refresh-fed-history",
+        ]) == 0
+    assert build_site.call_args.kwargs["refresh_fed_history"] is True
+    assert build_site.call_args.kwargs["fed_history_source_url"] == "https://example.test/history.js"
 
 
 def _complete_payloads() -> dict[str, object]:

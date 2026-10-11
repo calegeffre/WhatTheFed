@@ -97,6 +97,12 @@ def fetch_existing_history(source_url: str | None) -> dict[str, object]:
 
 
 def fetch_existing_backtest(source_url: str | None) -> dict[str, object] | None:
+    return fetch_existing_meetings(source_url, "__DATA_BACKTEST_DATA__")
+
+
+def fetch_existing_meetings(
+    source_url: str | None, global_name: str
+) -> dict[str, object] | None:
     if not source_url:
         return None
     request = Request(source_url, headers={"User-Agent": "WhatTheFed/1.0"})
@@ -108,12 +114,12 @@ def fetch_existing_backtest(source_url: str | None) -> dict[str, object] | None:
             return None
         raise
 
-    prefix = "window.__DATA_BACKTEST_DATA__ = "
+    prefix = f"window.{global_name} = "
     if not text.startswith(prefix) or not text.endswith(";"):
-        raise RuntimeError("Deployed backtest data has an invalid format.")
+        raise RuntimeError(f"Deployed {global_name} has an invalid format.")
     payload = json.loads(text[len(prefix) : -1])
     if not isinstance(payload, dict) or not isinstance(payload.get("meetings"), list):
-        raise RuntimeError("Deployed backtest data has an invalid payload.")
+        raise RuntimeError(f"Deployed {global_name} has an invalid payload.")
     return payload
 
 
@@ -135,6 +141,8 @@ def build_site(
     history_source_url: str | None = None,
     backtest_source_url: str | None = None,
     refresh_backtest: bool = False,
+    fed_history_source_url: str | None = None,
+    refresh_fed_history: bool = False,
 ) -> None:
     output_dir = output_dir.resolve()
     if REPO_ROOT not in output_dir.parents:
@@ -150,6 +158,14 @@ def build_site(
     existing_backtest = (
         None if refresh_backtest else fetch_existing_backtest(backtest_source_url)
     )
+    fed_history = (
+        fetch_history_payload(start_year=1982)
+        if refresh_fed_history
+        else fetch_existing_meetings(fed_history_source_url, "__FED_RATE_HISTORY_DATA__")
+    )
+    if fed_history is None:
+        fed_history = {"meetings": []}
+        print("::warning::Fed rate history unavailable; historical views are disabled.", flush=True)
     if output_dir.exists():
         shutil.rmtree(output_dir)
     data_dir = output_dir / "data"
@@ -274,9 +290,12 @@ def build_site(
             run_ingestion_command(label=label, module=module, arguments=arguments)
             print("::endgroup::", flush=True)
 
-    fed_history = fetch_history_payload(start_year=1982)
     export_fed_history_js(fed_history, data_dir / "fed_rate_history_data.js")
-    backtest = resolve_backtest_payload(data_dir, existing_backtest, as_of=today)
+    backtest = (
+        resolve_backtest_payload(data_dir, existing_backtest, as_of=today)
+        if existing_backtest is not None or fed_history["meetings"]
+        else {"meetings": []}
+    )
     export_backtest_js(backtest, data_dir / "data_backtest_data.js")
 
     snapshot = build_prediction_snapshot(load_dashboard_payloads(data_dir))
@@ -320,6 +339,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Previously deployed backtest to reuse unless --refresh-backtest is set.",
     )
     parser.add_argument(
+        "--fed-history-source-url",
+        help="Previously deployed Fed rate history to reuse without fetching FRED.",
+    )
+    parser.add_argument(
+        "--refresh-fed-history",
+        action="store_true",
+        help="Rebuild historical Fed rates from the Fed and FRED (may time out).",
+    )
+    parser.add_argument(
         "--refresh-backtest",
         action="store_true",
         help="Recalculate the backtest instead of reusing the deployed payload.",
@@ -330,6 +358,8 @@ def main(argv: list[str] | None = None) -> int:
         history_source_url=args.history_source_url,
         backtest_source_url=args.backtest_source_url,
         refresh_backtest=args.refresh_backtest,
+        fed_history_source_url=args.fed_history_source_url,
+        refresh_fed_history=args.refresh_fed_history,
     )
     return 0
 
