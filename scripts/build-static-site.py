@@ -96,7 +96,46 @@ def fetch_existing_history(source_url: str | None) -> dict[str, object]:
     return payload
 
 
-def build_site(*, output_dir: Path, history_source_url: str | None = None) -> None:
+def fetch_existing_backtest(source_url: str | None) -> dict[str, object] | None:
+    if not source_url:
+        return None
+    request = Request(source_url, headers={"User-Agent": "WhatTheFed/1.0"})
+    try:
+        with urlopen(request, timeout=20) as response:
+            text = response.read().decode("utf-8").strip()
+    except HTTPError as error:
+        if error.code == 404:
+            return None
+        raise
+
+    prefix = "window.__DATA_BACKTEST_DATA__ = "
+    if not text.startswith(prefix) or not text.endswith(";"):
+        raise RuntimeError("Deployed backtest data has an invalid format.")
+    payload = json.loads(text[len(prefix) : -1])
+    if not isinstance(payload, dict) or not isinstance(payload.get("meetings"), list):
+        raise RuntimeError("Deployed backtest data has an invalid payload.")
+    return payload
+
+
+def resolve_backtest_payload(
+    data_dir: Path,
+    existing_backtest: dict[str, object] | None,
+    *,
+    as_of: date,
+) -> dict[str, object]:
+    if existing_backtest is not None:
+        return existing_backtest
+    meetings, histories = load_backtest_inputs(data_dir)
+    return build_backtest_payload(meetings=meetings, histories=histories, years=5, as_of=as_of)
+
+
+def build_site(
+    *,
+    output_dir: Path,
+    history_source_url: str | None = None,
+    backtest_source_url: str | None = None,
+    refresh_backtest: bool = False,
+) -> None:
     output_dir = output_dir.resolve()
     if REPO_ROOT not in output_dir.parents:
         raise ValueError(f"Output directory must be inside the repository: {output_dir}")
@@ -108,6 +147,9 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
     }:
         raise ValueError(f"Refusing to replace protected repository path: {output_dir}")
     existing_history = fetch_existing_history(history_source_url)
+    existing_backtest = (
+        None if refresh_backtest else fetch_existing_backtest(backtest_source_url)
+    )
     if output_dir.exists():
         shutil.rmtree(output_dir)
     data_dir = output_dir / "data"
@@ -234,8 +276,7 @@ def build_site(*, output_dir: Path, history_source_url: str | None = None) -> No
 
     fed_history = fetch_history_payload(start_year=1982)
     export_fed_history_js(fed_history, data_dir / "fed_rate_history_data.js")
-    meetings, histories = load_backtest_inputs(data_dir)
-    backtest = build_backtest_payload(meetings=meetings, histories=histories, years=5, as_of=today)
+    backtest = resolve_backtest_payload(data_dir, existing_backtest, as_of=today)
     export_backtest_js(backtest, data_dir / "data_backtest_data.js")
 
     snapshot = build_prediction_snapshot(load_dashboard_payloads(data_dir))
@@ -274,8 +315,22 @@ def main(argv: list[str] | None = None) -> int:
         "--history-source-url",
         help="Previously deployed model history to extend. A missing file starts a new archive.",
     )
+    parser.add_argument(
+        "--backtest-source-url",
+        help="Previously deployed backtest to reuse unless --refresh-backtest is set.",
+    )
+    parser.add_argument(
+        "--refresh-backtest",
+        action="store_true",
+        help="Recalculate the backtest instead of reusing the deployed payload.",
+    )
     args = parser.parse_args(argv)
-    build_site(output_dir=args.output_dir, history_source_url=args.history_source_url)
+    build_site(
+        output_dir=args.output_dir,
+        history_source_url=args.history_source_url,
+        backtest_source_url=args.backtest_source_url,
+        refresh_backtest=args.refresh_backtest,
+    )
     return 0
 
 

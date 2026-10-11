@@ -3,8 +3,9 @@ from __future__ import annotations
 from copy import deepcopy
 import runpy
 import subprocess
+from datetime import date
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
@@ -61,6 +62,51 @@ def test_ingestion_command_raises_after_last_attempt() -> None:
 
     assert run.call_count == 3
     assert sleep.call_args_list == [call(10), call(30)]
+
+
+def test_existing_backtest_is_reused_without_recalculation() -> None:
+    namespace = _script_namespace()
+    payload = {"meetings": [{"meeting_date": "2026-09-16"}]}
+    load_inputs = Mock()
+    build_backtest = Mock()
+    resolver_globals = namespace["resolve_backtest_payload"].__globals__
+
+    with patch.dict(
+        resolver_globals,
+        {
+            "load_backtest_inputs": load_inputs,
+            "build_backtest_payload": build_backtest,
+        },
+    ):
+        result = namespace["resolve_backtest_payload"](
+            Path("unused"),
+            payload,
+            as_of=date(2026, 10, 8),
+        )
+
+    assert result is payload
+    load_inputs.assert_not_called()
+    build_backtest.assert_not_called()
+
+
+def test_fetch_existing_backtest_parses_deployed_payload() -> None:
+    namespace = _script_namespace()
+    payload_text = (
+        'window.__DATA_BACKTEST_DATA__ = '
+        '{"meetings":[{"meeting_date":"2026-09-16"}]};'
+    )
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = payload_text.encode()
+    urlopen = Mock(return_value=response)
+    fetch_globals = namespace["fetch_existing_backtest"].__globals__
+
+    with patch.dict(fetch_globals, {"urlopen": urlopen}):
+        payload = namespace["fetch_existing_backtest"](
+            "https://example.test/data_backtest_data.js"
+        )
+
+    assert payload == {"meetings": [{"meeting_date": "2026-09-16"}]}
+    urlopen.assert_called_once()
 
 
 def _complete_payloads() -> dict[str, object]:

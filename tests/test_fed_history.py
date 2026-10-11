@@ -5,6 +5,7 @@ from whatthefed.fed_history import (
     TargetObservation,
     _fetch_text,
     build_history_payload,
+    fetch_history_payload,
     parse_current_statement_meetings,
     parse_historical_meeting_dates,
     parse_target_csv,
@@ -72,6 +73,32 @@ def test_fetch_text_retries_after_timeout() -> None:
 
     assert urlopen.call_count == 2
     assert sleep.call_args_list == [call(5)]
+
+
+def test_fetch_text_uses_custom_timeout() -> None:
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = b"history"
+
+    with patch("whatthefed.fed_history.urlopen", return_value=response) as urlopen:
+        assert _fetch_text("https://example.test/history", timeout=120) == "history"
+
+    assert urlopen.call_args.kwargs["timeout"] == 120
+
+
+def test_fred_target_history_uses_longer_fetch_timeout() -> None:
+    with (
+        patch(
+            "whatthefed.fed_history._fetch_text",
+            side_effect=["calendar", "historical", "target"],
+        ) as fetch_text,
+        patch("whatthefed.fed_history.parse_current_statement_meetings", return_value={}),
+        patch("whatthefed.fed_history.parse_historical_meeting_dates", return_value=[]),
+        patch("whatthefed.fed_history.parse_target_csv", return_value=[]),
+        patch("whatthefed.fed_history.build_history_payload", return_value={}),
+    ):
+        fetch_history_payload(start_year=2020)
+
+    assert fetch_text.call_args_list[-1].kwargs["timeout"] == 120
 
 
 def test_fetch_text_raises_after_retry_limit() -> None:
