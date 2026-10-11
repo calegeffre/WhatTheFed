@@ -20,6 +20,10 @@ on:
         description: Recalculate the model backtest during this deployment
         type: boolean
         default: false
+      refresh_fed_history:
+        description: Rebuild historical Fed rates from the Fed and FRED (may time out)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,15 +48,20 @@ jobs:
       - name: Build static dashboard
         env:
           REFRESH_BACKTEST: ${{ inputs.refresh_backtest }}
+          REFRESH_FED_HISTORY: ${{ inputs.refresh_fed_history }}
         run: |
           args=()
           if [[ "$REFRESH_BACKTEST" == "true" ]]; then
             args+=(--refresh-backtest)
           fi
+          if [[ "$REFRESH_FED_HISTORY" == "true" ]]; then
+            args+=(--refresh-fed-history)
+          fi
           python scripts/build-static-site.py \
             --output-dir _site \
             --history-source-url https://calegeffre.github.io/WhatTheFed/data/model_probability_history_data.js \
             --backtest-source-url https://calegeffre.github.io/WhatTheFed/data/data_backtest_data.js \
+            --fed-history-source-url https://calegeffre.github.io/WhatTheFed/data/fed_rate_history_data.js \
             "${args[@]}"
 
       - name: Configure GitHub Pages

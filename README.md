@@ -40,7 +40,7 @@ cards display `?` with an error instead of substituting fallback values.
 ## Refresh schedule
 
 GitHub Actions is the primary ingestion and deployment path. The
-`.github/workflows/deploy-pages.yml` workflow rebuilds every data source using
+`.github/workflows/deploy-pages.yml` workflow rebuilds current data sources using
 disposable SQLite, then deploys the generated browser assets to GitHub Pages.
 
 | Trigger | Cadence |
@@ -57,6 +57,14 @@ are not required for the hosted dashboard.
 Hosted ingestion retries a failed source up to three times for transient
 provider errors. If all attempts fail, deployment stops rather than publishing
 stale or substitute data.
+
+Historical Fed target rates are not pulled from FRED on routine runs because
+that download repeatedly times out. Builds reuse the deployed rate archive and
+backtest instead. If no rate archive exists, historical charts and an uncached
+backtest remain unavailable; current data still refreshes. To rebuild the archive,
+select `refresh_fed_history` in a manual workflow run (or pass
+`--refresh-fed-history` locally). Select `refresh_backtest` as well to recalculate
+the backtest. An explicit historical refresh still stops deployment on failure.
 
 ## Storage and outputs
 
