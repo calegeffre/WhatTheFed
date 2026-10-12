@@ -995,11 +995,13 @@
     window.__GDP_DASHBOARD_DATA__ = window.__GDP_DASHBOARD_DATA__ || null;
     window.__FED_EVENTS_DASHBOARD_DATA__ = window.__FED_EVENTS_DASHBOARD_DATA__ || null;
     window.__MODEL_PROBABILITY_HISTORY_DATA__ = window.__MODEL_PROBABILITY_HISTORY_DATA__ || null;
+    window.__REFRESH_STATUS_DATA__ = window.__REFRESH_STATUS_DATA__ || null;
     window.__KG_EXPERIMENT__ = window.__KG_EXPERIMENT__ || "experiment-1";
     window.__KG_MEETING_OFFSET__ = window.__KG_MEETING_OFFSET__ || 0;
   </script>
   <script src="data/fomc_dashboard_data.js"></script>
   <script src="data/fomc_history_data.js"></script>
+  <script src="data/refresh_status_data.js"></script>
   <script src="data/fed_rate_history_data.js"></script>
   <script src="data/data_backtest_data.js"></script>
   <script src="data/market_dashboard_data.js"></script>
@@ -1117,6 +1119,14 @@
     const modelHistoryOverlay = window.__MODEL_PROBABILITY_HISTORY_DATA__;
     const fedRateHistoryOverlay = window.__FED_RATE_HISTORY_DATA__;
     const backtestOverlay = window.__DATA_BACKTEST_DATA__;
+    const refreshFailures = window.__REFRESH_STATUS_DATA__?.failures || [];
+    if (refreshFailures.length) {
+      const notice = document.createElement("p");
+      notice.className = "note";
+      notice.setAttribute("role", "status");
+      notice.textContent = `Partial refresh: ${refreshFailures.join(", ")} unavailable. Retained data may be stale; sources without saved data remain unavailable.`;
+      document.querySelector("main").prepend(notice);
+    }
     const normalizeTriplet = (values) => {
       const parsed = {
         raise: Number(values?.raise || 0),
@@ -1621,9 +1631,17 @@
         return [meetingDate, meeting];
       }),
     );
-    const allMeetings = (fedRateHistoryOverlay?.meetings || []).map((meeting) => ({
+    const combinedMeetingByDate = new Map(
+      (fedRateHistoryOverlay?.meetings || []).map((meeting) => [meeting.meeting_date, meeting]),
+    );
+    recentMeetingByDate.forEach((meeting, meetingDate) => {
+      combinedMeetingByDate.set(meetingDate, {
+        ...(combinedMeetingByDate.get(meetingDate) || {}),
+        ...meeting,
+      });
+    });
+    const allMeetings = [...combinedMeetingByDate.values()].map((meeting) => ({
       ...meeting,
-      ...(recentMeetingByDate.get(meeting.meeting_date) || {}),
       detailed: detailedMeetingByDate.get(meeting.meeting_date) || null,
     }));
     const meetingsByYear = {};
@@ -1652,11 +1670,15 @@
       const tallyChip = meeting.vote_tally
         ? `<span class="source-pill">Official vote: ${meeting.vote_tally}</span>`
         : "";
-      const targetLabel = Number(meeting.target_lower) === Number(meeting.target_upper)
+      const hasTarget = meeting.target_lower != null && meeting.target_upper != null
+        && Number.isFinite(Number(meeting.target_lower)) && Number.isFinite(Number(meeting.target_upper));
+      const targetLabel = !hasTarget ? "Unavailable" : Number(meeting.target_lower) === Number(meeting.target_upper)
         ? `${Number(meeting.target_upper).toFixed(2)}%`
         : `${Number(meeting.target_lower).toFixed(2)}–${Number(meeting.target_upper).toFixed(2)}%`;
-      const change = Number(meeting.change_bps || 0);
-      const changeChip = change
+      const change = meeting.change_bps == null ? null : Number(meeting.change_bps);
+      const changeChip = change == null || !Number.isFinite(change)
+        ? `<span class="source-pill">Rate change unavailable</span>`
+        : change
         ? `<span class="source-pill">Change: ${change > 0 ? "+" : ""}${change} bp</span>`
         : `<span class="source-pill">No rate change</span>`;
       card.innerHTML = `
@@ -1789,7 +1811,10 @@
     }
 
     // Rate history: [date, lower-bound %, upper-bound %, decision]
-    const RATE_HISTORY = (fedRateHistoryOverlay?.meetings || []).map((meeting) => [
+    const RATE_HISTORY = (fedRateHistoryOverlay?.meetings || []).filter((meeting) =>
+      meeting.target_lower != null && meeting.target_upper != null
+      && Number.isFinite(Number(meeting.target_lower)) && Number.isFinite(Number(meeting.target_upper)),
+    ).map((meeting) => [
       meeting.meeting_date,
       Number(meeting.target_lower),
       Number(meeting.target_upper),
