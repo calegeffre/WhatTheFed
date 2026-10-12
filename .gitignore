@@ -3,3 +3,4 @@ __pycache__/
 data/
 *.db
 *.sqlite3
+.refresh-cache/

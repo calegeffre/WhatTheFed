@@ -37,13 +37,21 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+
+      - name: Restore saved refresh data
+        uses: actions/cache/restore@v4.3.0
+        with:
+          path: .refresh-cache
+          key: refresh-data-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            refresh-data-v1-
 
       - name: Build static dashboard
         env:
@@ -59,10 +67,18 @@ jobs:
           fi
           python scripts/build-static-site.py \
             --output-dir _site \
+            --cache-dir .refresh-cache \
             --history-source-url https://calegeffre.github.io/WhatTheFed/data/model_probability_history_data.js \
             --backtest-source-url https://calegeffre.github.io/WhatTheFed/data/data_backtest_data.js \
             --fed-history-source-url https://calegeffre.github.io/WhatTheFed/data/fed_rate_history_data.js \
             "${args[@]}"
+
+      - name: Save successful refresh data even after failures
+        if: ${{ always() }}
+        uses: actions/cache/save@v4.3.0
+        with:
+          path: .refresh-cache
+          key: refresh-data-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

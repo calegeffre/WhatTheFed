@@ -41,7 +41,7 @@ cards display `?` with an error instead of substituting fallback values.
 
 GitHub Actions is the primary ingestion and deployment path. The
 `.github/workflows/deploy-pages.yml` workflow rebuilds current data sources using
-disposable SQLite, then deploys the generated browser assets to GitHub Pages.
+a saved SQLite database, then deploys the generated browser assets to GitHub Pages.
 
 | Trigger | Cadence |
 | --- | --- |
@@ -55,16 +55,25 @@ local database. Windows Task Scheduler registration scripts are optional and
 are not required for the hosted dashboard.
 
 Hosted ingestion retries a failed source up to three times for transient
-provider errors. If all attempts fail, deployment stops rather than publishing
-stale or substitute data.
+provider errors. If all attempts fail, other sources continue refreshing. Successful
+outputs and observations are saved in `.refresh-cache` and restored on the next
+Actions run. Failed sources retain their last saved payload, or remain unavailable
+if none exists; a visible partial-refresh notice warns that retained data may be
+stale. Model probability snapshots are appended only when all required current
+model inputs refresh successfully.
+If a deployed archive cannot be retrieved and no saved copy exists, ingestion
+still saves successful data, but publication stops to avoid replacing unknown
+existing history with an empty archive. The next run retries retrieval.
 
 Historical Fed target rates are not pulled from FRED on routine runs because
 that download repeatedly times out. Builds reuse the deployed rate archive and
-backtest instead. If no rate archive exists, historical charts and an uncached
+backtest instead. Recent FOMC decisions are saved and displayed independently of
+that archive. If no rate archive exists, long-term rate charts and an uncached
 backtest remain unavailable; current data still refreshes. To rebuild the archive,
 select `refresh_fed_history` in a manual workflow run (or pass
 `--refresh-fed-history` locally). Select `refresh_backtest` as well to recalculate
-the backtest. An explicit historical refresh still stops deployment on failure.
+the backtest. Historical refreshes run after current ingestion; a timeout retains
+the saved archive and does not prevent deployment of successful current data.
 
 ## Storage and outputs
 
@@ -72,13 +81,13 @@ the backtest. An explicit historical refresh still stops deployment on failure.
 - Browser-ready payloads are exported to `data/*.js` and loaded by `index.html`.
 - A graph payload is also exported for the knowledge-graph view.
 - The official Fed calendar is checked for upcoming speeches from all Board speakers, with Chair events highlighted and official livestream links retained.
-- Hosted builds use a disposable SQLite database and upload only `index.html` plus generated JavaScript payloads; the database is never included in the Pages artifact.
-- Model probability history is carried forward from the currently deployed Pages payload and extended after a complete successful build. A missing history file starts a new archive; other retrieval or validation failures stop deployment rather than erase prior snapshots.
+- Hosted builds restore and save `.refresh-cache` with Actions cache, including SQLite observations and browser payloads, even if a later build step fails. Actions caches can be evicted; this is not a permanent backup. Only `index.html` plus generated JavaScript payloads are uploaded to Pages; the database is never included.
+- Model probability history is carried forward from saved data or the currently deployed Pages payload and extended only after successful current-source ingestion. Retrieval failures retain saved history rather than erase it.
 
 Build the same static artifact locally with:
 
 ```powershell
-python scripts\build-static-site.py --output-dir _site
+python scripts\build-static-site.py --output-dir _site --cache-dir .refresh-cache
 ```
 
 ## Tech stack
