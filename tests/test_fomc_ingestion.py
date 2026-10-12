@@ -225,6 +225,17 @@ class FOMCIngestionTests(unittest.TestCase):
         self.assertNotIn("target_lower", payload["2024"][0])
         self.assertNotIn("target_upper", payload["2024"][0])
 
+    def test_extracts_target_after_official_change_amount(self) -> None:
+        for change in ("1/2 percentage point", "1/4 percentage point", "25 basis points"):
+            with self.subTest(change=change):
+                self.assertEqual(
+                    _extract_target_range(
+                        "The Committee decided to lower the target range for the federal "
+                        f"funds rate by {change} to 4-3/4 to 5 percent."
+                    ),
+                    {"target_lower": 4.75, "target_upper": 5.0},
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

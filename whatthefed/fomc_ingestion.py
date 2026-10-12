@@ -660,6 +660,7 @@ def _extract_target_range(content: str) -> dict[str, float]:
         rf"\b(?:the\s+)?committee\s+decided\s+to\s+"
         rf"(?:maintain|keep|raise|increase|lower|reduce|cut)\s+"
         rf"the\s+target\s+range\s+for\s+the\s+federal\s+funds\s+rate\s+"
+        rf"(?:by\s+{number}\s+(?:percentage\s+points?|basis\s+points?)\s+)?"
         rf"(?:at|to)\s+(?P<lower>{number})\s+to\s+(?P<upper>{number})\s+percent\b",
         content.replace("–", "-").replace("−", "-"),
         re.IGNORECASE,
