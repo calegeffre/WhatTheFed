@@ -1811,10 +1811,10 @@
     }
 
     // Rate history: [date, lower-bound %, upper-bound %, decision]
-    const RATE_HISTORY = (fedRateHistoryOverlay?.meetings || []).filter((meeting) =>
+    const RATE_HISTORY = allMeetings.filter((meeting) =>
       meeting.target_lower != null && meeting.target_upper != null
       && Number.isFinite(Number(meeting.target_lower)) && Number.isFinite(Number(meeting.target_upper)),
-    ).map((meeting) => [
+    ).sort((a, b) => a.meeting_date.localeCompare(b.meeting_date)).map((meeting) => [
       meeting.meeting_date,
       Number(meeting.target_lower),
       Number(meeting.target_upper),
@@ -1835,7 +1835,13 @@
       const svg = document.getElementById("rate-chart");
       if (!svg) return;
       svg.innerHTML = "";
-      if (!RATE_HISTORY.length) return;
+      if (!RATE_HISTORY.length) {
+        svg.appendChild(svgEl("text", {
+          x: 400, y: 130, "text-anchor": "middle",
+          fill: "rgba(200,210,225,0.65)", "font-size": 13,
+        }, "Target rates unavailable; awaiting an official FOMC statement or saved rate archive."));
+        return;
+      }
 
       const VW = 800, VH = 260;
       const P = { t: 22, r: 24, b: 50, l: 54 };
@@ -1846,7 +1852,7 @@
         : Number.NEGATIVE_INFINITY;
       const visible = RATE_HISTORY.filter(([meetingDate]) => new Date(`${meetingDate}T00:00:00Z`).getTime() >= cutoff);
       const minT = new Date(`${visible[0][0]}T00:00:00Z`).getTime();
-      const maxT = latest.getTime();
+      const maxT = Math.max(latest.getTime(), minT + 86400000);
       const rateValues = visible.flatMap(([, low, high]) => [low, high]);
       const minR = Math.max(0, Math.floor((Math.min(...rateValues) - 0.25) * 2) / 2);
       const maxR = Math.ceil((Math.max(...rateValues) + 0.25) * 2) / 2;
@@ -1861,7 +1867,7 @@
       }
 
       // Build upper step path then polygon with lower path reversed (rate band fill)
-      const xEnd = xS(latest);
+      const xEnd = P.l + CW;
       let upper = `M ${xS(visible[0][0])},${yS(visible[0][2])}`;
       for (let i = 1; i < visible.length; i++) upper += ` H ${xS(visible[i][0])} V ${yS(visible[i][2])}`;
       upper += ` H ${xEnd}`;

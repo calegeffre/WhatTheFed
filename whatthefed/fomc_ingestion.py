@@ -654,6 +654,37 @@ def _meeting_label_from_iso(value: str) -> str:
         return value
 
 
+def _extract_target_range(content: str) -> dict[str, float]:
+    number = r"(?:\d+\s*-\s*\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)"
+    match = re.search(
+        rf"\b(?:the\s+)?committee\s+decided\s+to\s+"
+        rf"(?:maintain|keep|raise|increase|lower|reduce|cut)\s+"
+        rf"the\s+target\s+range\s+for\s+the\s+federal\s+funds\s+rate\s+"
+        rf"(?:at|to)\s+(?P<lower>{number})\s+to\s+(?P<upper>{number})\s+percent\b",
+        content.replace("–", "-").replace("−", "-"),
+        re.IGNORECASE,
+    )
+    if match is None:
+        return {}
+
+    def parse_rate(value: str) -> float:
+        parts = re.split(r"\s*-\s*", value)
+        if "/" not in value:
+            return float(value)
+        numerator, denominator = map(int, parts[-1].split("/"))
+        whole = float(parts[0]) if len(parts) == 2 else 0.0
+        return whole + numerator / denominator
+
+    try:
+        lower = parse_rate(match.group("lower"))
+        upper = parse_rate(match.group("upper"))
+    except (ValueError, ZeroDivisionError):
+        return {}
+    if not 0 <= lower <= upper <= 100:
+        return {}
+    return {"target_lower": lower, "target_upper": upper}
+
+
 def build_dashboard_fomc_history_payload(
     *,
     db_path: str | Path = DEFAULT_DB_PATH,
@@ -664,7 +695,7 @@ def build_dashboard_fomc_history_payload(
     try:
         rows = connection.execute(
             """
-            SELECT meeting_date, title, decision, vote_tally, summary, statement_url
+            SELECT meeting_date, title, decision, vote_tally, summary, statement_url, content
             FROM fomc_statements
             ORDER BY meeting_date DESC
             """
@@ -684,6 +715,7 @@ def build_dashboard_fomc_history_payload(
                 "summary": row["summary"],
                 "source_url": row["statement_url"],
                 "title": row["title"],
+                **_extract_target_range(row["content"]),
             }
         )
     return grouped

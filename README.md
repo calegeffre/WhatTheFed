@@ -68,8 +68,11 @@ existing history with an empty archive. The next run retries retrieval.
 Historical Fed target rates are not pulled from FRED on routine runs because
 that download repeatedly times out. Builds reuse the deployed rate archive and
 backtest instead. Recent FOMC decisions are saved and displayed independently of
-that archive. If no rate archive exists, long-term rate charts and an uncached
-backtest remain unavailable; current data still refreshes. To rebuild the archive,
+that archive. The rate decision chart also uses target ranges parsed directly
+from those official statements, so recent rates remain visible when FRED or
+unrelated imports fail. Unparseable ranges are omitted, not estimated. If no rate
+archive exists, older rate history and an uncached backtest remain unavailable;
+current data still refreshes. To rebuild the archive,
 select `refresh_fed_history` in a manual workflow run (or pass
 `--refresh-fed-history` locally). Select `refresh_backtest` as well to recalculate
 the backtest. Historical refreshes run after current ingestion; a timeout retains

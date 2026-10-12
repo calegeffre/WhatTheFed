@@ -92,14 +92,68 @@ def test_rate_chart_excludes_decisions_without_target_rates() -> None:
     start = html.index("    const RATE_HISTORY = ")
     end = html.index("    const rateRangeControls", start)
     script = """
-const fedRateHistoryOverlay = { meetings: [
+const allMeetings = [
   { meeting_date: "2026-01-01", decision: "hold" },
   { meeting_date: "2026-02-01", target_lower: null, target_upper: null },
   { meeting_date: "2026-03-01", target_lower: 0, target_upper: 0.25, decision: "cut" },
-] };
+];
 """
     result = subprocess.run(
         [shutil.which("node"), "-e", script + html[start:end] + "console.log(JSON.stringify(RATE_HISTORY));"],
         check=True, capture_output=True, text=True,
     )
     assert json.loads(result.stdout) == [["2026-03-01", 0, 0.25, "cut"]]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is unavailable")
+@pytest.mark.parametrize("meeting_count", [0, 1, 3])
+def test_rate_chart_renders_recent_statement_rates_without_other_imports(meeting_count: int) -> None:
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text()
+    start = html.index('    const meetingTimeline = document.getElementById("meeting-timeline");')
+    end = html.index("    function drawModelProbabilityHistory()", start)
+    meetings = [
+        {
+            "meeting_date": f"2026-0{index + 1}-01",
+            "label": f"Meeting {index}",
+            "decision": "hold",
+            "target_lower": 3.5,
+            "target_upper": 3.75,
+        }
+        for index in reversed(range(meeting_count))
+    ]
+    script = """
+const elements = {};
+const document = {
+  getElementById(id) {
+    return elements[id] ||= {
+      innerHTML: "", children: [],
+      appendChild(child) { this.children.push(child); },
+      querySelectorAll() { return []; },
+    };
+  },
+  createElement() { return { innerHTML: "", className: "" }; },
+  createElementNS(ns, tag) {
+    return { tag, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  },
+};
+const dashboardData = { meeting_history: [] };
+const fedRateHistoryOverlay = null;
+"""
+    script += f"const window = {{ __FOMC_HISTORY_DATA__: {{ '2026': {json.dumps(meetings)} }} }};\n"
+    script += html[start:end] + """
+drawRateTimeline();
+console.log(JSON.stringify({ history: RATE_HISTORY, nodes: elements["rate-chart"].children }));
+"""
+    result = subprocess.run(
+        [shutil.which("node"), "-e", script], check=True, capture_output=True, text=True,
+    )
+    payload = json.loads(result.stdout)
+    assert len(payload["history"]) == meeting_count
+    assert payload["history"] == sorted(payload["history"])
+    assert payload["nodes"]
+    assert "NaN" not in result.stdout
+    assert "Infinity" not in result.stdout
+    if meeting_count:
+        assert any(node["tag"] == "path" for node in payload["nodes"])
+    else:
+        assert "Target rates unavailable" in result.stdout

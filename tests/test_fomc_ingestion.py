@@ -6,6 +6,7 @@ from pathlib import Path
 from whatthefed.fomc_ingestion import (
     FOMC_BASE_URL,
     FOMCStatementStore,
+    _extract_target_range,
     export_dashboard_fomc_js,
     export_dashboard_fomc_history_js,
     parse_calendar_statement_urls,
@@ -186,9 +187,43 @@ class FOMCIngestionTests(unittest.TestCase):
             self.assertIn("2026", payload)
             self.assertEqual(len(payload["2026"]), 2)
             self.assertEqual(payload["2026"][0]["meeting_date"], "2026-06-17")
+            self.assertEqual(payload["2026"][0]["target_lower"], 3.5)
+            self.assertEqual(payload["2026"][0]["target_upper"], 3.75)
 
             js_text = js_path.read_text(encoding="utf-8")
             self.assertTrue(js_text.startswith("window.__FOMC_HISTORY_DATA__ = "))
+
+    def test_extracts_official_target_ranges_without_dissent_values(self) -> None:
+        for bounds, expected in (
+            ("0 to 1/4", {"target_lower": 0.0, "target_upper": 0.25}),
+            ("0 to 0.25", {"target_lower": 0.0, "target_upper": 0.25}),
+            ("5-1/4 to 5-1/2", {"target_lower": 5.25, "target_upper": 5.5}),
+            ("4–1/4 to 4–1/2", {"target_lower": 4.25, "target_upper": 4.5}),
+            ("3.75 to 3.50", {}),
+            ("3-1/0 to 4", {}),
+        ):
+            with self.subTest(bounds=bounds):
+                content = (
+                    "The Committee decided to lower the target range for the federal "
+                    f"funds rate to {bounds} percent. "
+                    "Voting against this action was Example, who preferred to reduce "
+                    "the target range for the federal funds rate to 2 to 2.25 percent."
+                )
+                self.assertEqual(_extract_target_range(content), expected)
+
+    def test_unavailable_target_is_not_exported_as_zero(self) -> None:
+        statement = parse_statement_html(
+            f"{FOMC_BASE_URL}/newsevents/pressreleases/monetary20241211a.htm",
+            SAMPLE_NAMED_VOTE_HTML,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "fomc.db"
+            FOMCStatementStore(db_path).write_statement(statement)
+            payload = export_dashboard_fomc_history_js(
+                db_path=db_path, output_js_path=Path(temp_dir) / "history.js",
+            )
+        self.assertNotIn("target_lower", payload["2024"][0])
+        self.assertNotIn("target_upper", payload["2024"][0])
 
 
 if __name__ == "__main__":
