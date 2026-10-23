@@ -279,6 +279,53 @@
       padding-right: 8px;
     }
 
+    .evidence-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .evidence-layout[hidden] { display: none; }
+
+    .evidence-graph-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(141, 200, 255, 0.16);
+      border-radius: 14px;
+    }
+
+    .evidence-graph {
+      width: 100%;
+      min-width: 600px;
+      display: block;
+    }
+
+    .evidence-node { cursor: pointer; }
+    .evidence-node:focus { outline: none; }
+    .evidence-node:focus rect,
+    .evidence-node[aria-pressed="true"] rect {
+      stroke: #f7b267;
+      stroke-width: 3;
+    }
+
+    .evidence-details {
+      padding: 16px;
+      border: 1px solid rgba(141, 200, 255, 0.16);
+      border-radius: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    .evidence-details pre {
+      white-space: pre-wrap;
+      font-size: 12px;
+      max-height: 300px;
+      overflow: auto;
+    }
+
+    @media (max-width: 920px) {
+      .evidence-layout { grid-template-columns: 1fr; }
+    }
+
     .timeline-card {
       position: relative;
       padding: 22px 22px 22px 28px;
@@ -785,6 +832,7 @@
       <div class="viz-tabs">
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
         <button class="viz-tab" data-viz="model-history">Data Probability History</button>
+        <button class="viz-tab" data-viz="meeting-evidence">Meeting Evidence Explorer</button>
         <button class="viz-tab" data-viz="knowledge-graph">Signal Knowledge Graph</button>
         <button class="viz-tab" data-viz="raw-data">Raw Data</button>
         <button class="viz-tab" data-viz="experiment-details">Experiment Details</button>
@@ -828,6 +876,26 @@
           <button class="kg-tab" data-kg-exp="experiment-8">Experiment 8 · Sensitivity Tornado</button>
         </div>
         <div id="kg-canvas" class="viz-chart" style="height:540px;position:relative;overflow:hidden;"></div>
+      </div>
+      <div id="viz-panel-meeting-evidence" class="viz-panel">
+        <div class="model-history-header">
+          <div>
+            <h3>Meeting Evidence Explorer</h3>
+            <p id="evidence-summary" class="note" role="status"></p>
+          </div>
+          <label class="model-history-picker">
+            Completed FOMC meeting
+            <select id="evidence-meeting" aria-label="Choose a meeting for evidence"></select>
+          </label>
+        </div>
+        <p class="note">Explore model inputs and official sources, not causal explanations of the Fed's decision. Click a node or select it with the keyboard to inspect its details.</p>
+        <div class="evidence-layout" id="evidence-layout" hidden>
+          <div class="evidence-graph-wrap">
+            <svg id="evidence-graph" class="evidence-graph" viewBox="0 0 1000 780" role="group" aria-label="Meeting, reconstruction, signals, observations, and sources"></svg>
+          </div>
+          <aside id="evidence-details" class="evidence-details" aria-label="Selected evidence" aria-live="polite"></aside>
+        </div>
+        <p id="evidence-limitations" class="note"></p>
       </div>
       <div id="viz-panel-raw-data" class="viz-panel">
         <div id="raw-data-wrap" class="raw-data-wrap"></div>
@@ -982,6 +1050,7 @@
     window.__FOMC_HISTORY_DATA__ = window.__FOMC_HISTORY_DATA__ || null;
     window.__FED_RATE_HISTORY_DATA__ = window.__FED_RATE_HISTORY_DATA__ || null;
     window.__DATA_BACKTEST_DATA__ = window.__DATA_BACKTEST_DATA__ || null;
+    window.__MEETING_EVIDENCE_DATA__ = window.__MEETING_EVIDENCE_DATA__ || null;
     window.__MARKET_DASHBOARD_DATA__ = window.__MARKET_DASHBOARD_DATA__ || null;
     window.__CPI_DASHBOARD_DATA__ = window.__CPI_DASHBOARD_DATA__ || null;
     window.__KG_DASHBOARD_DATA__ = window.__KG_DASHBOARD_DATA__ || null;
@@ -1004,6 +1073,8 @@
   <script src="data/refresh_status_data.js"></script>
   <script src="data/fed_rate_history_data.js"></script>
   <script src="data/data_backtest_data.js"></script>
+  <script src="data/meeting_evidence_data.js"></script>
+  <script src="assets/meeting-evidence.js" defer></script>
   <script src="data/market_dashboard_data.js"></script>
   <script src="data/cpi_dashboard_data.js"></script>
   <script src="data/kg_dashboard_data.js"></script>

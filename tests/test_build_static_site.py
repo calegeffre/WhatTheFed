@@ -24,6 +24,16 @@ from whatthefed.prediction_history import (
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build-static-site.py"
 
 
+@pytest.fixture(autouse=True)
+def dashboard_assets(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "meeting-evidence.js").write_text(
+        (SCRIPT_PATH.parents[1] / "assets" / "meeting-evidence.js").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+
 def _script_namespace() -> dict[str, object]:
     return runpy.run_path(str(SCRIPT_PATH), run_name="build_static_site")
 
@@ -497,7 +507,7 @@ def test_all_missing_sources_export_null_and_keep_building(tmp_path: Path, capsy
         text = (tmp_path / "_site/data" / name).read_text()
         if name not in {
             "fed_rate_history_data.js", "data_backtest_data.js", "model_probability_history_data.js",
-            "refresh_status_data.js",
+            "refresh_status_data.js", "meeting_evidence_data.js",
         }:
             assert text == f"window.{global_name} = null;\n"
     assert "Model snapshot skipped" in capsys.readouterr().out
@@ -693,7 +703,7 @@ def test_build_cannot_replace_protected_repository_paths(
 ) -> None:
     build_site = _script_namespace()["build_site"]
     protected = tmp_path / protected_name
-    protected.mkdir()
+    protected.mkdir(exist_ok=True)
     sentinel = protected / "keep"
     sentinel.write_text("preserve")
     kwargs = {"output_dir": tmp_path / "_site", argument: protected}

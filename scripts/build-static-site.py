@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import shutil
 import subprocess
 import sys
@@ -27,12 +28,15 @@ from whatthefed.prediction_history import (
 )
 from whatthefed.backtest import build_backtest_payload, load_backtest_inputs
 from whatthefed.fed_history import fetch_history_payload
+from whatthefed.meeting_evidence import build_neo4j_evidence, export_evidence_js
+from whatthefed.neo4j_connection import load_settings
 
 EXPECTED_PAYLOADS = (
     "fomc_dashboard_data.js",
     "fomc_history_data.js",
     "fed_rate_history_data.js",
     "data_backtest_data.js",
+    "meeting_evidence_data.js",
     "market_dashboard_data.js",
     "cpi_dashboard_data.js",
     "kg_dashboard_data.js",
@@ -59,6 +63,7 @@ PAYLOAD_NAMES.update({
     "fed_events_dashboard_data.js": "__FED_EVENTS_DASHBOARD_DATA__",
     "fed_rate_history_data.js": "__FED_RATE_HISTORY_DATA__",
     "data_backtest_data.js": "__DATA_BACKTEST_DATA__",
+    "meeting_evidence_data.js": "__MEETING_EVIDENCE_DATA__",
     "model_probability_history_data.js": "__MODEL_PROBABILITY_HISTORY_DATA__",
     "refresh_status_data.js": "__REFRESH_STATUS_DATA__",
 })
@@ -360,6 +365,7 @@ def build_site(
     fed_history_source_url: str | None = None,
     refresh_fed_history: bool = False,
     cache_dir: Path | None = None,
+    neo4j_env_file: Path | None = None,
 ) -> None:
     output_dir = output_dir.resolve()
     if REPO_ROOT not in output_dir.parents:
@@ -387,7 +393,7 @@ def build_site(
     cached_sources = {}
     if cache_dir is not None:
         for name in EXPECTED_PAYLOADS:
-            if name == "refresh_status_data.js":
+            if name in {"refresh_status_data.js", "meeting_evidence_data.js"}:
                 continue
             path = cache_dir / "data" / name
             if path.exists():
@@ -542,7 +548,7 @@ def build_site(
     for name in EXPECTED_PAYLOADS:
         if not (data_dir / name).exists() and name not in {
             "fed_rate_history_data.js", "data_backtest_data.js", "model_probability_history_data.js",
-            "refresh_status_data.js",
+            "refresh_status_data.js", "meeting_evidence_data.js",
         }:
             write_payload(None, data_dir / name)
 
@@ -608,7 +614,7 @@ def build_site(
             raise RuntimeError("Previous probability history is unknown; cannot start a replacement archive.")
         required = set(EXPECTED_PAYLOADS) - {
             "fed_rate_history_data.js", "data_backtest_data.js",
-            "model_probability_history_data.js", "refresh_status_data.js",
+            "model_probability_history_data.js", "refresh_status_data.js", "meeting_evidence_data.js",
         }
         if not required.issubset(fresh_payloads):
             raise RuntimeError("Required sources were not all refreshed successfully.")
@@ -631,6 +637,15 @@ def build_site(
             + ", ".join(sorted(unknown_archives))
         )
 
+    if neo4j_env_file is not None or os.environ.get("NEO4J_URI"):
+        evidence = build_neo4j_evidence(data_dir, load_settings(neo4j_env_file))
+    else:
+        evidence = {
+            "available": False,
+            "reason": "Neo4j evidence is not configured for this build.",
+        }
+    export_evidence_js(evidence, data_dir / "meeting_evidence_data.js")
+
     missing = [
         name
         for name in EXPECTED_PAYLOADS
@@ -640,6 +655,9 @@ def build_site(
         raise RuntimeError(f"Static build did not produce required payloads: {missing}")
 
     shutil.copy2(REPO_ROOT / "index.html", output_dir / "index.html")
+    assets_dir = output_dir / "assets"
+    assets_dir.mkdir()
+    shutil.copy2(REPO_ROOT / "assets" / "meeting-evidence.js", assets_dir / "meeting-evidence.js")
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
     database_files = [
         path
@@ -661,6 +679,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="_site", type=Path)
     parser.add_argument("--cache-dir", type=Path, help="Durable local ingestion database and payload cache.")
+    parser.add_argument(
+        "--neo4j-env-file", type=Path,
+        help="Local ignored Neo4j credentials file. Hosted builds use environment secrets.",
+    )
     parser.add_argument(
         "--history-source-url",
         help="Previously deployed model history to extend. A missing file starts a new archive.",
@@ -692,6 +714,7 @@ def main(argv: list[str] | None = None) -> int:
         refresh_backtest=args.refresh_backtest,
         fed_history_source_url=args.fed_history_source_url,
         refresh_fed_history=args.refresh_fed_history,
+        neo4j_env_file=args.neo4j_env_file,
     )
     return 0
 

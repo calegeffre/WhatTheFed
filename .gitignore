@@ -4,3 +4,4 @@ data/
 *.db
 *.sqlite3
 .refresh-cache/
+.env.neo4j

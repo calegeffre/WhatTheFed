@@ -99,3 +99,76 @@ python scripts\build-static-site.py --output-dir _site --cache-dir .refresh-cach
 - **SQLite** for local persistence
 - **HTML/CSS/JavaScript** for the static dashboard
 - **Three.js** for the 3D knowledge graph
+
+## Meeting Evidence Explorer (Neo4j Aura)
+
+The Meeting Evidence Explorer is a separate, selectable graph view under Data
+Visualization. Choose a completed meeting, then click or keyboard-select a node
+to follow the reconstructed model's inputs to dated observations and official
+source pages. The decision node represents the outcome, not evidence available
+before that meeting.
+
+The first version covers meetings in the five-year backtest. It uses the same
+lag-based observation selection as that backtest. Estimated availability dates
+are **not verified original release timestamps**, and values can include later
+revisions. Forecasts are retrospective reconstructions, not archived live
+forecasts. Edges show model provenance, not economic causation. Historical
+market prices, speeches, and individual votes are not included yet.
+
+Install the optional driver:
+
+```powershell
+python -m pip install -r requirements-neo4j.txt
+```
+
+Create `.env.neo4j` locally (Git ignores it):
+
+```text
+NEO4J_URI=neo4j+s://YOUR_INSTANCE.databases.neo4j.io
+NEO4J_USERNAME=YOUR_USERNAME
+NEO4J_PASSWORD=YOUR_PASSWORD
+NEO4J_DATABASE=YOUR_DATABASE_NAME
+```
+
+Use the actual database name from Aura; it is not necessarily `neo4j`. Environment
+variables override values in the file. Never put credentials in dashboard
+JavaScript or commit the credentials file.
+
+```powershell
+python scripts\build-static-site.py --output-dir _site --neo4j-env-file .env.neo4j
+```
+
+The build writes project-scoped `WTFMeetingEvidence` nodes and typed relationships
+to Aura, then queries and verifies the complete graph before exporting
+`data/meeting_evidence_data.js`. A content hash identifies each immutable
+snapshot; identical imports are idempotent. Different source-data snapshots are
+retained, so storage grows with changed imports. Nothing deletes or changes
+other database labels. The Neo4j account needs read/write and constraint-creation
+permissions for the initial setup.
+
+Nodes also carry typed labels such as `WTFMeeting`, `WTFReconstruction`,
+`WTFSignal`, `WTFObservation`, and `WTFSource`. To inspect a meeting in Aura's
+graph interface, substitute a date from the dashboard and run:
+
+```cypher
+MATCH path = (m:WTFMeeting {meeting_date: '2026-09-16'})-[*1..4]->(e)
+RETURN path
+LIMIT 100
+```
+
+If multiple snapshots exist, filter `m.snapshot_id` using the `snapshot_id`
+in the exported evidence payload to inspect one exact version.
+
+For hosted builds, configure repository Actions secrets named `NEO4J_URI`,
+`NEO4J_USERNAME`, `NEO4J_PASSWORD`, and `NEO4J_DATABASE`. The workflow installs the
+optional driver when `NEO4J_URI` is set. Configured connection/import failures
+stop the build; unconfigured builds explicitly show the explorer as unavailable.
+Only public economic evidence and source metadata belong in this graph: its
+export is published on GitHub Pages. The browser never connects to Aura or
+receives credentials.
+
+To import/query an already-generated set of payloads:
+
+```powershell
+python -m whatthefed.meeting_evidence --data-dir _site\data --env-file .env.neo4j --output-js _site\data\meeting_evidence_data.js
+```
