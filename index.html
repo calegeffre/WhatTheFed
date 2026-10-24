@@ -124,36 +124,86 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    .heat-map {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 14px;
+    .pressure-scale {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+      font-size: 12px;
+    }
+
+    .pressure-scale span { padding: 7px 12px; border-radius: 8px; }
+
+    .data-treemap {
+      position: relative;
       margin-top: 16px;
     }
 
-    .heat-cell {
-      border-radius: 18px;
-      padding: 16px;
-      min-height: 148px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      display: grid;
-      gap: 8px;
-      align-content: start;
+    .treemap-group {
+      position: absolute;
+      border: 1px solid rgba(141, 200, 255, 0.18);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.025);
     }
 
-    .heat-cell .eyebrow {
-      margin-bottom: 0;
+    .treemap-group h3 {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      font-size: 14px;
     }
 
-    .heat-cell .source-list {
-      margin-top: 6px;
+    .treemap-tiles { position: absolute; inset: 40px 6px 6px; }
+
+    .treemap-tile {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       gap: 6px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      overflow: hidden;
+      overflow-wrap: anywhere;
     }
 
-    .heat-cell .source-pill {
-      font-size: 11px;
-      padding: 4px 9px;
+    .treemap-tile:hover { border-color: var(--balanced); }
+    .treemap-tile:focus-visible { outline: 2px solid var(--balanced); outline-offset: -3px; }
+    .treemap-tile-label { font-size: 14px; font-weight: 600; }
+    .treemap-score { font-size: 30px; line-height: 1.1; font-weight: 700; }
+    .treemap-direction, .treemap-reading { font-size: 12px; line-height: 1.4; }
+    .treemap-market-probability { font-size: 15px; font-weight: 600; }
+    .treemap-asof { margin-top: auto; font-size: 11px; color: var(--muted); }
+    .treemap-tile-compact { padding: 10px; gap: 4px; }
+    .treemap-tile-compact .treemap-reading { display: none; }
+    .treemap-tile-compact .treemap-tile-label { font-size: 12px; }
+    .treemap-tile-compact .treemap-score { font-size: 26px; }
+    .treemap-tile-compact .treemap-direction { font-size: 11px; }
+    .treemap-stacked { display: grid; gap: 12px; }
+    .treemap-stacked .treemap-group { position: relative; }
+
+    .treemap-dialog {
+      width: min(560px, calc(100% - 32px));
+      max-height: calc(100vh - 48px);
+      padding: 24px;
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      color: var(--text);
+      background: var(--panel);
+      overflow: auto;
     }
+
+    .treemap-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+    .treemap-dialog-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    .treemap-dialog button { cursor: pointer; font: inherit; }
+    .treemap-dialog dl { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin: 20px 0; }
+    .treemap-dialog dt { color: var(--muted); }
+    .treemap-dialog dd { margin: 0; text-align: right; }
 
     .heat-score {
       font-size: 30px;
@@ -279,52 +329,55 @@
       padding-right: 8px;
     }
 
-    .evidence-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr);
-      gap: 16px;
+    .meeting-evidence-card {
       margin-top: 16px;
-    }
-
-    .evidence-layout[hidden] { display: none; }
-
-    .evidence-graph-wrap {
-      overflow-x: auto;
       border: 1px solid rgba(141, 200, 255, 0.16);
       border-radius: 14px;
+      background: rgba(141, 200, 255, 0.03);
     }
 
-    .evidence-graph {
-      width: 100%;
-      min-width: 600px;
-      display: block;
+    .meeting-evidence-card > summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      font-weight: 600;
     }
 
-    .evidence-node { cursor: pointer; }
-    .evidence-node:focus { outline: none; }
-    .evidence-node:focus rect,
-    .evidence-node[aria-pressed="true"] rect {
-      stroke: #f7b267;
-      stroke-width: 3;
+    .meeting-evidence-card > summary:focus-visible {
+      outline: 2px solid var(--balanced);
+      outline-offset: 3px;
     }
 
-    .evidence-details {
+    .evidence-toggle {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    .evidence-content {
       padding: 16px;
-      border: 1px solid rgba(141, 200, 255, 0.16);
-      border-radius: 14px;
+      border-top: 1px solid rgba(141, 200, 255, 0.16);
       overflow-wrap: anywhere;
     }
 
-    .evidence-details pre {
-      white-space: pre-wrap;
-      font-size: 12px;
-      max-height: 300px;
-      overflow: auto;
+    .evidence-content > .note { margin: 0 0 12px; }
+    .evidence-table-wrap { overflow-x: auto; }
+    .evidence-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .evidence-table th, .evidence-table td {
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-
-    @media (max-width: 920px) {
-      .evidence-layout { grid-template-columns: 1fr; }
-    }
+    .evidence-table th { color: var(--muted); font-weight: 500; }
+    .evidence-table caption { text-align: left; color: var(--muted); padding-bottom: 12px; }
+    .evidence-values summary { cursor: pointer; color: var(--balanced); }
+    .evidence-values dl { display: grid; grid-template-columns: auto auto; gap: 6px 12px; }
+    .evidence-values dt { color: var(--muted); text-transform: capitalize; }
+    .evidence-values dd { margin: 0; }
 
     .timeline-card {
       position: relative;
@@ -483,12 +536,6 @@
       background: rgba(123, 211, 137, 0.9);
     }
 
-    @media (max-width: 1080px) {
-      .heat-map {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
     @media (max-width: 920px) {
       .timeline-votes-grid {
         grid-template-columns: repeat(4, minmax(80px, 1fr));
@@ -498,9 +545,6 @@
     @media (max-width: 600px) {
       .timeline-votes-grid {
         grid-template-columns: repeat(3, minmax(72px, 1fr));
-      }
-      .heat-map {
-        grid-template-columns: 1fr;
       }
       .prediction-grid {
         grid-template-columns: 1fr;
@@ -803,28 +847,17 @@
     </section>
 
     <section class="section">
-      <div class="fed-events-heading">
-        <div>
-          <div class="eyebrow">Upcoming Fed Communication</div>
-          <h2>Scheduled speeches and appearances</h2>
-          <p id="fed-events-summary" class="note">
-            Official Federal Reserve calendar; Chair appearances are highlighted.
-          </p>
-        </div>
-        <a
-          class="pill"
-          href="https://www.federalreserve.gov/newsevents/calendar.htm"
-          target="_blank"
-          rel="noopener noreferrer"
-        >Full Fed calendar</a>
-      </div>
-      <div id="fed-events-grid" class="fed-events-grid"></div>
-    </section>
-
-    <section class="section">
       <div class="eyebrow">Data at a glance</div>
-      <p class="note">Every signal feeding the prediction above, grouped by source: FOMC statement, inflation, labor, and prediction markets.</p>
-      <div id="heat-map" class="heat-map"></div>
+      <p class="note">One policy-pressure scale for every signal: 1 favors lower rates, 3 is balanced, and 5 favors higher rates. Scores are not probabilities; market odds and original economic readings keep their actual units.</p>
+      <div class="pressure-scale" aria-label="Policy-pressure scale from 1 to 5">
+        <span class="heat-cold">1 · Lower</span>
+        <span class="heat-cool">2 · Leans lower</span>
+        <span class="heat-balanced">3 · Balanced</span>
+        <span class="heat-warm">4 · Leans higher</span>
+        <span class="heat-hot">5 · Higher</span>
+      </div>
+      <p class="note">Select a tile for readings and sources. Rectangle sizes organize information, not forecast weights. Policy Context describes the last FOMC statement, not current economic data.</p>
+      <div id="data-treemap" class="data-treemap" aria-label="Economic data grouped by source"></div>
     </section>
 
     <section class="section">
@@ -832,7 +865,6 @@
       <div class="viz-tabs">
         <button class="viz-tab viz-tab-active" data-viz="rate-timeline">Rate Decision Timeline</button>
         <button class="viz-tab" data-viz="model-history">Data Probability History</button>
-        <button class="viz-tab" data-viz="meeting-evidence">Meeting Evidence Explorer</button>
         <button class="viz-tab" data-viz="knowledge-graph">Signal Knowledge Graph</button>
         <button class="viz-tab" data-viz="raw-data">Raw Data</button>
         <button class="viz-tab" data-viz="experiment-details">Experiment Details</button>
@@ -866,36 +898,16 @@
       </div>
       <div id="viz-panel-knowledge-graph" class="viz-panel">
         <div class="kg-tabs">
-          <button class="kg-tab kg-tab-active" data-kg-exp="experiment-1">Experiment 1 · Bias Gradient</button>
-          <button class="kg-tab" data-kg-exp="experiment-2">Experiment 2 · Source Clusters</button>
-          <button class="kg-tab" data-kg-exp="experiment-3">Experiment 3 · Timeline Lanes</button>
-          <button class="kg-tab" data-kg-exp="experiment-4">Experiment 4 · Contribution Sunburst</button>
-          <button class="kg-tab" data-kg-exp="experiment-5">Experiment 5 · Dual Mandate</button>
+          <button class="kg-tab kg-tab-active" data-kg-exp="experiment-1">Experiment 1 · Dual Mandate</button>
+          <button class="kg-tab" data-kg-exp="experiment-2">Experiment 2 · Bias Gradient</button>
+          <button class="kg-tab" data-kg-exp="experiment-3">Experiment 3 · Source Clusters</button>
+          <button class="kg-tab" data-kg-exp="experiment-4">Experiment 4 · Timeline Lanes</button>
+          <button class="kg-tab" data-kg-exp="experiment-5">Experiment 5 · Contribution Sunburst</button>
           <button class="kg-tab" data-kg-exp="experiment-6">Experiment 6 · Decision Funnel</button>
           <button class="kg-tab" data-kg-exp="experiment-7">Experiment 7 · Monte Carlo Cloud</button>
           <button class="kg-tab" data-kg-exp="experiment-8">Experiment 8 · Sensitivity Tornado</button>
         </div>
         <div id="kg-canvas" class="viz-chart" style="height:540px;position:relative;overflow:hidden;"></div>
-      </div>
-      <div id="viz-panel-meeting-evidence" class="viz-panel">
-        <div class="model-history-header">
-          <div>
-            <h3>Meeting Evidence Explorer</h3>
-            <p id="evidence-summary" class="note" role="status"></p>
-          </div>
-          <label class="model-history-picker">
-            Completed FOMC meeting
-            <select id="evidence-meeting" aria-label="Choose a meeting for evidence"></select>
-          </label>
-        </div>
-        <p class="note">Explore model inputs and official sources, not causal explanations of the Fed's decision. Click a node or select it with the keyboard to inspect its details.</p>
-        <div class="evidence-layout" id="evidence-layout" hidden>
-          <div class="evidence-graph-wrap">
-            <svg id="evidence-graph" class="evidence-graph" viewBox="0 0 1000 780" role="group" aria-label="Meeting, reconstruction, signals, observations, and sources"></svg>
-          </div>
-          <aside id="evidence-details" class="evidence-details" aria-label="Selected evidence" aria-live="polite"></aside>
-        </div>
-        <p id="evidence-limitations" class="note"></p>
       </div>
       <div id="viz-panel-raw-data" class="viz-panel">
         <div id="raw-data-wrap" class="raw-data-wrap"></div>
@@ -917,6 +929,21 @@
         <div class="experiment-details-grid">
           <article class="experiment-details-card">
             <span class="experiment-number">Experiment 1</span>
+            <h3>Dual Mandate</h3>
+            <h4>ELI5: Separate a clue's importance from the direction it pushes policy.</h4>
+            <p>Current evidence sits between maximum employment and stable prices according to which mandate it informs most.</p>
+            <ul>
+              <li><strong>Left/right:</strong> employment relevance to inflation relevance.</li>
+              <li><strong>Factor size:</strong> fixed macro-model weight, so labor stays prominent even when its bias is near neutral.</li>
+              <li><strong>Color and labels:</strong> green means less hike pressure, white neutral, and red more hike pressure.</li>
+              <li><strong>Mandate size:</strong> its share of current weighted signal attention, not outcome probabilities.</li>
+              <li><strong>Watch out:</strong> this display does not change forecast weights or measure surprises versus expectations.</li>
+            </ul>
+            <button class="experiment-open" data-open-experiment="experiment-1">Open this experiment</button>
+          </article>
+
+          <article class="experiment-details-card">
+            <span class="experiment-number">Experiment 2</span>
             <h3>Bias Gradient</h3>
             <h4>ELI5: Put every clue on the same ruler.</h4>
             <p>Each source gets translated onto the cut-to-raise scale so unlike data can be compared side by side.</p>
@@ -926,11 +953,11 @@
               <li><strong>Use it for:</strong> seeing which clues agree, conflict, or sit near hold.</li>
               <li><strong>Watch out:</strong> bias is direction and strength, not an outcome probability.</li>
             </ul>
-            <button class="experiment-open" data-open-experiment="experiment-1">Open this experiment</button>
+            <button class="experiment-open" data-open-experiment="experiment-2">Open this experiment</button>
           </article>
 
           <article class="experiment-details-card">
-            <span class="experiment-number">Experiment 2</span>
+            <span class="experiment-number">Experiment 3</span>
             <h3>Source Clusters</h3>
             <h4>ELI5: Sort the clues into labeled baskets.</h4>
             <p>FOMC text, markets, CPI, labor, Treasury data, and other domains each form a cluster around the meeting.</p>
@@ -940,11 +967,11 @@
               <li><strong>Use it for:</strong> learning what raw observations make up each domain bias.</li>
               <li><strong>Watch out:</strong> where a basket sits around the ring is layout, not rank.</li>
             </ul>
-            <button class="experiment-open" data-open-experiment="experiment-2">Open this experiment</button>
+            <button class="experiment-open" data-open-experiment="experiment-3">Open this experiment</button>
           </article>
 
           <article class="experiment-details-card">
-            <span class="experiment-number">Experiment 3</span>
+            <span class="experiment-number">Experiment 4</span>
             <h3>Timeline Lanes</h3>
             <h4>ELI5: Lay every data series on a calendar.</h4>
             <p>The most recent observations run left to right in separate GDP, CPI, PPI, labor, Treasury, breakeven, money-market, and fiscal lanes.</p>
@@ -954,11 +981,11 @@
               <li><strong>Size:</strong> how large the latest local change was.</li>
               <li><strong>Watch out:</strong> depth compares a series with itself, not dollars with percentages.</li>
             </ul>
-            <button class="experiment-open" data-open-experiment="experiment-3">Open this experiment</button>
+            <button class="experiment-open" data-open-experiment="experiment-4">Open this experiment</button>
           </article>
 
           <article class="experiment-details-card">
-            <span class="experiment-number">Experiment 4</span>
+            <span class="experiment-number">Experiment 5</span>
             <h3>Contribution Sunburst</h3>
             <h4>ELI5: Turn the evidence into slices of a pie.</h4>
             <p>The inner ring groups evidence by domain and the outer ring breaks each domain into categories or series.</p>
@@ -967,20 +994,6 @@
               <li><strong>Color:</strong> whether the chunk leans cut, hold, or raise.</li>
               <li><strong>Use it for:</strong> spotting domains represented by many important components.</li>
               <li><strong>Watch out:</strong> these display shares are not the headline model's fixed macro weights.</li>
-            </ul>
-            <button class="experiment-open" data-open-experiment="experiment-4">Open this experiment</button>
-          </article>
-
-          <article class="experiment-details-card">
-            <span class="experiment-number">Experiment 5</span>
-            <h3>Dual Mandate</h3>
-            <h4>ELI5: See which side of the Fed's job needs more attention.</h4>
-            <p>Current evidence sits between maximum employment and stable prices according to which mandate it informs most.</p>
-            <ul>
-              <li><strong>Left/right:</strong> employment relevance to inflation relevance.</li>
-              <li><strong>Size:</strong> model weight combined with how far the signal is from neutral.</li>
-              <li><strong>Mandate size:</strong> its share of current macro attention.</li>
-              <li><strong>Use it for:</strong> seeing whether prices or employment currently demands more attention.</li>
             </ul>
             <button class="experiment-open" data-open-experiment="experiment-5">Open this experiment</button>
           </article>
@@ -1031,6 +1044,25 @@
     </section>
 
     <section class="section">
+      <div class="fed-events-heading">
+        <div>
+          <div class="eyebrow">Upcoming Fed Communication</div>
+          <h2>Scheduled speeches and appearances</h2>
+          <p id="fed-events-summary" class="note">
+            Official Federal Reserve calendar; Chair appearances are highlighted.
+          </p>
+        </div>
+        <a
+          class="pill"
+          href="https://www.federalreserve.gov/newsevents/calendar.htm"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Full Fed calendar</a>
+      </div>
+      <div id="fed-events-grid" class="fed-events-grid"></div>
+    </section>
+
+    <section class="section">
       <div class="eyebrow">Previous meeting history</div>
       <p class="note">Comparable target-rate decisions from 1982 onward. Select an individual year from 2020 onward or browse the complete 1980–2020 archive. Recent cards include published tallies and detailed voting context when available. For older records, changes compare the target aligned to each meeting or conference call with the prior recorded event so intermeeting moves remain visible.</p>
       <div id="year-tabs" class="year-tabs"></div>
@@ -1074,7 +1106,8 @@
   <script src="data/fed_rate_history_data.js"></script>
   <script src="data/data_backtest_data.js"></script>
   <script src="data/meeting_evidence_data.js"></script>
-  <script src="assets/meeting-evidence.js" defer></script>
+  <script src="assets/meeting-evidence.js?v=meeting-cards" defer></script>
+  <script src="assets/data-treemap.js?v=grouped-pressure" defer></script>
   <script src="data/market_dashboard_data.js"></script>
   <script src="data/cpi_dashboard_data.js"></script>
   <script src="data/kg_dashboard_data.js"></script>
@@ -1295,14 +1328,6 @@
         timeZone: "UTC",
       });
     };
-    const scoreFromProbability = (value) => Math.max(1, Math.min(5, Math.round((value || 0) * 5)));
-    const toneFromScore = (score) => {
-      if (score >= 5) return "hot";
-      if (score === 4) return "warm";
-      if (score === 3) return "balanced";
-      if (score === 2) return "cool";
-      return "cold";
-    };
 
     const marketPrediction = (() => {
       const marketProbabilities = normalizeTriplet(marketOverlay?.blended_probabilities);
@@ -1406,132 +1431,6 @@
       };
     })();
 
-    const missingHeatCard = (label, payloadName) => ({
-      label,
-      display: "?",
-      toneLabel: "data unavailable",
-      tone: "missing",
-      sources: [`ERROR: missing ${payloadName} payload`],
-    });
-
-    const marketHeatCards = (() => {
-      const toneFromDecision = { raise: "hot", hold: "balanced", cut: "cold" };
-      const decisionArrow   = { raise: "↑", hold: "→", cut: "↓" };
-      return ["kalshi", "polymarket"].map((provider) => {
-        const payload = marketOverlay?.providers?.[provider];
-        const name = provider.charAt(0).toUpperCase() + provider.slice(1);
-        if (!payload?.probabilities) return missingHeatCard(name, `${provider} market`);
-        const probs = normalizeTriplet(payload.probabilities || {});
-        if (probs.raise + probs.hold + probs.cut <= 0) return missingHeatCard(name, `${provider} market`);
-        const [topDecision] = Object.entries(probs).sort((a, b) => b[1] - a[1])[0];
-        const topPct = probs[topDecision];
-        const tone = toneFromDecision[topDecision] ?? "balanced";
-        return {
-          label: name,
-          display: formatPct(topPct),
-          toneLabel: topDecision,
-          score: scoreFromProbability(topPct),
-          tone,
-          sources: [
-            `${decisionArrow.raise} Raise ${formatPct(probs.raise)}`,
-            `${decisionArrow.hold} Hold ${formatPct(probs.hold)}`,
-            `${decisionArrow.cut} Cut ${formatPct(probs.cut)}`,
-            `target ${marketOverlay.target_meeting}`,
-          ],
-        };
-      });
-    })();
-
-    const cpiHeatCards = (() => {
-      if (!cpiOverlay?.heat_card) return [missingHeatCard("CPI", "CPI")];
-      return [cpiOverlay.heat_card];
-    })();
-
-    const laborHeatCards = (() => {
-      if (!laborOverlay?.heat_card) return [missingHeatCard("Labor", "labor")];
-      return [laborOverlay.heat_card];
-    })();
-
-    const policyRateHeatCards = (() => {
-      if (!policyRateOverlay?.heat_card) return [missingHeatCard("Policy Rates", "NY Fed policy-rate")];
-      return [policyRateOverlay.heat_card];
-    })();
-
-    const breakevenHeatCards = (() => {
-      if (!breakevenOverlay?.heat_card) return [missingHeatCard("Breakevens", "TIPS breakeven")];
-      return [breakevenOverlay.heat_card];
-    })();
-
-    const treasuryHeatCards = (() => {
-      const pointByMaturity = (maturity) =>
-        (treasuryOverlay?.points || []).find((point) => String(point?.maturity) === maturity);
-      const y2 = Number(pointByMaturity("2Y")?.yield_pct);
-      const y10 = Number(pointByMaturity("10Y")?.yield_pct);
-      if (!Number.isFinite(y2) || !Number.isFinite(y10)) {
-        return [missingHeatCard("Treasury Curve", "Treasury curve")];
-      }
-      const slope = y10 - y2;
-      const bias = Math.max(-1, Math.min(1, slope / 1.5));
-      const score = Math.max(1, Math.min(5, Math.round(3 + bias * 2)));
-      return [{
-        label: "Treasury Curve",
-        display: `${slope >= 0 ? "+" : ""}${slope.toFixed(2)} pp`,
-        toneLabel: `bias ${bias >= 0 ? "+" : ""}${bias.toFixed(2)}`,
-        score,
-        tone: toneFromScore(score),
-        sources: [
-          `2Y ${y2.toFixed(2)}%`,
-          `10Y ${y10.toFixed(2)}%`,
-          `Treasury ${treasuryOverlay.latest_snapshot_at || "date unavailable"}`,
-        ],
-      }];
-    })();
-
-    const ppiHeatCards = (() => {
-      if (!ppiOverlay?.heat_card) return [missingHeatCard("PPI", "PPI")];
-      return [ppiOverlay.heat_card];
-    })();
-
-    const fiscalHeatCards = (() => {
-      if (!fiscalOverlay?.heat_card) return [missingHeatCard("Fiscal Impulse", "Treasury fiscal")];
-      return [fiscalOverlay.heat_card];
-    })();
-
-    const gdpHeatCards = (() => {
-      if (!gdpOverlay?.heat_card) return [missingHeatCard("GDP Growth", "BEA GDP")];
-      return [gdpOverlay.heat_card];
-    })();
-
-    const fomcHeatCards = (() => {
-      if (!fomcOverlay || !Array.isArray(fomcOverlay.signals) || !fomcOverlay.signals.length) {
-        return [missingHeatCard("FOMC Signals", "FOMC")];
-      }
-      return fomcOverlay.signals.map((signal) => {
-        const score = Math.max(1, Math.min(5, Number(signal?.score || 3)));
-        const rawLabel = String(signal?.label || "FOMC Signal");
-        return {
-          label: rawLabel === "Policy Bias" ? "Previous Meeting Bias" : rawLabel,
-          score,
-          display: signal?.display ?? undefined,
-          tone: String(signal?.tone || toneFromScore(score)),
-          sources: Array.isArray(signal?.sources) ? signal.sources.map((source) => String(source)) : [],
-        };
-      });
-    })();
-
-    const combinedHeatMap = [
-      ...fomcHeatCards,
-      ...cpiHeatCards,
-      ...ppiHeatCards,
-      ...laborHeatCards,
-      ...breakevenHeatCards,
-      ...treasuryHeatCards,
-      ...policyRateHeatCards,
-      ...fiscalHeatCards,
-      ...gdpHeatCards,
-      ...marketHeatCards,
-    ];
-
     function renderFedEvents() {
       const grid = document.getElementById("fed-events-grid");
       const summary = document.getElementById("fed-events-summary");
@@ -1632,19 +1531,6 @@
       pill.className = "source-pill";
       pill.textContent = source;
       sources.appendChild(pill);
-    });
-
-    const heatMap = document.getElementById("heat-map");
-    combinedHeatMap.forEach((item) => {
-      const card = document.createElement("article");
-      card.className = `heat-cell heat-${item.tone}`;
-      card.innerHTML = `
-        <div class="eyebrow">${item.label}</div>
-        <div class="heat-score">${item.display ?? (item.score + "/5")}</div>
-        <div>${item.toneLabel ?? item.tone}</div>
-        <div class="source-list">${item.sources.map((source) => `<span class="source-pill">${source}</span>`).join("")}</div>
-      `;
-      heatMap.appendChild(card);
     });
 
     const backtestSummary = document.getElementById("backtest-summary");
@@ -1848,6 +1734,12 @@
       if (!meetings) return;
       meetings.forEach((meeting) => {
         const card = meeting.detailed ? renderFullCard(meeting.detailed) : renderDbCard(meeting);
+        card.innerHTML += `
+          <details class="meeting-evidence-card" data-meeting-date="${escHtml(meeting.meeting_date)}">
+            <summary><span>Meeting evidence</span><span class="evidence-toggle">View data</span></summary>
+            <div class="evidence-content" aria-live="polite"></div>
+          </details>
+        `;
         meetingTimeline.appendChild(card);
       });
     }
@@ -2624,34 +2516,34 @@
 
       const EXPERIMENT_VIEWS = {
         "experiment-1": {
+          camera: [0, 2.0, 17.2],
+          target: [0, 0.0, 0],
+          distance: [6, 36],
+          legend: `Layout: dual mandate. Left = employment, right = inflation. Factor size = fixed macro-model weight, not distance from neutral. ${BIAS_SCALE_BAR} factor colour = less → neutral → more hike pressure. Mandate size / percentages = weighted signal attention, not outcome odds. Forecast weights are unchanged.`,
+        },
+        "experiment-2": {
           camera: [0, 3.4, 13.5],
           target: [0, 1.2, 0],
           distance: [5, 28],
           legend: `Layout: x-axis = policy bias. ${BIAS_SCALE_BAR} lower → hold → raise. Size = signal weight × |bias|. Drop lines tie each node to the bias axis.`,
         },
-        "experiment-2": {
+        "experiment-3": {
           camera: [0, 6.4, 16.5],
           target: [0, 1.6, 0],
           distance: [6, 34],
           legend: `Layout: one cluster per source on a shared ring. Size = category relevance to Fed policy. ${BIAS_SCALE_BAR} colour = that chunk's share of its domain bias.`,
         },
-        "experiment-3": {
+        "experiment-4": {
           camera: [0, 3.2, 17.0],
           target: [0, 1.0, 0],
           distance: [6, 36],
           legend: "Layout: eight time lanes (GDP / CPI / PPI / Labor / Treasury / Breakeven / Money Market / Fiscal). x = time, z = value normalised within each series, size = local change. The blue marker is the focused meeting date.",
         },
-        "experiment-4": {
+        "experiment-5": {
           camera: [0, 7.6, 17.5],
           target: [0, 1.6, 0],
           distance: [7, 38],
           legend: `Layout: sunburst of weight chunks — arc length = share of total decision weight, ring 1 = source, ring 2 = category chunk. ${BIAS_SCALE_BAR} colour = bias contribution.`,
-        },
-        "experiment-5": {
-          camera: [0, 2.0, 17.2],
-          target: [0, 0.0, 0],
-          distance: [6, 36],
-          legend: "Layout: dual mandate. Left = employment, right = inflation; factor position = mandate relevance and size = fixed model weight × current signal intensity. Mandate node size summarizes its share of current macro attention.",
         },
         "experiment-6": {
           camera: [0, 4.2, 17.5],
@@ -3203,7 +3095,7 @@
         return points.sort((a, b) => a.timestamp - b.timestamp);
       }
 
-      function buildGraphExperiment1(scene, context) {
+      function buildGraphExperiment2(scene, context) {
         const hub = [0, 0.9, 0];
         const axisY = -3.05;
         const axisSpan = 4.8;
@@ -3260,7 +3152,7 @@
         addReferenceGrid(scene);
       }
 
-      function buildGraphExperiment2(scene, context) {
+      function buildGraphExperiment3(scene, context) {
         const hub = [0, 1.0, 0];
         makeNode(scene, hub[0], hub[1], hub[2], 0x8dc8ff, 0.52, context.meetingLabel, context.decisionStr);
 
@@ -3364,7 +3256,7 @@
         addReferenceGrid(scene);
       }
 
-      function buildGraphExperiment3(scene, context) {
+      function buildGraphExperiment4(scene, context) {
         const gdpObs = extractGraphObservations({
           graph: window.__GDP_DASHBOARD_DATA__?.gdp_graph,
           seriesKind: "gdp_series",
@@ -3534,7 +3426,7 @@
         addReferenceGrid(scene);
       }
 
-      function buildGraphExperiment4(scene, context) {
+      function buildGraphExperiment5(scene, context) {
         const signalChildren = context.signals.map((signal) => {
           const label = String(signal?.label || "Signal");
           const score = Number(signal?.score || 3);
@@ -3682,7 +3574,7 @@
         addReferenceGrid(scene);
       }
 
-      function buildGraphExperiment5(scene, context) {
+      function buildGraphExperiment1(scene, context) {
         const factors = [
           { key: "labor", label: "Labor", bias: context.laborBias, affinity: -0.95 },
           { key: "gdp", label: "GDP", bias: context.gdpBias || 0, affinity: -0.65 },
@@ -3715,7 +3607,7 @@
         const attentionTotal = Math.max(0.0001, attention.inflation + attention.employment);
         const inflationAttention = attention.inflation / attentionTotal;
         const employmentAttention = attention.employment / attentionTotal;
-        const maxIntensity = Math.max(...factors.map((factor) => factor.intensity), 0.0001);
+        const maxWeight = Math.max(...factors.map((factor) => factor.weight), 0.0001);
         const employmentPos = [-5.0, 0.8, 0];
         const inflationPos = [5.0, 0.8, 0];
         const employmentColor = 0x7bd389;
@@ -3744,20 +3636,19 @@
             -2.1 + (index % 2) * 0.8,
             ((index % 3) - 1) * 1.05,
           ];
-          const neutral = new THREE.Color(0x8dc8ff);
-          const mandateColor = new THREE.Color(
-            factor.affinity >= 0 ? inflationColor : employmentColor,
-          );
-          const color = neutral.lerp(mandateColor, Math.abs(factor.affinity)).getHex();
+          const direction = factor.bias < 0 ? "less hike pressure"
+            : factor.bias > 0 ? "more hike pressure" : "neutral pressure";
+          const laborLabel = factor.key === "labor"
+            ? factor.bias < 0 ? "Cooler labor" : factor.bias > 0 ? "Hotter labor" : "Balanced labor"
+            : factor.label;
           makeNode(
             scene,
             ...position,
-            color,
-            importanceRadius(factor.intensity / maxIntensity, 0.10, 0.42),
-            factor.label,
-            `signal strength ${Math.round(Math.abs(factor.bias) * 100)}% · ` +
-              `${Math.round(factor.weight * 100)}% macro weight`,
-            true,
+            biasToColorHex(factor.bias),
+            importanceRadius(factor.weight / maxWeight, 0.10, 0.42),
+            `${laborLabel} · ${Math.round(factor.weight * 100)}% weight`,
+            `${factor.bias >= 0 ? "+" : ""}${factor.bias.toFixed(2)} bias · ${direction}`,
+            false,
           );
           if (factor.employmentShare >= 0.08) {
             addEdge(

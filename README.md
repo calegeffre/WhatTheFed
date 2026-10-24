@@ -34,8 +34,19 @@ shocks to this baseline over 520 deterministic Monte Carlo draws.
 Each hosted refresh also appends the resulting raise/hold/cut probabilities to
 the deployed model-history payload. The dashboard charts those snapshots by
 target FOMC meeting so changes in the model can be followed into each decision.
-If any required payload is missing or invalid, the headline and affected heat
-cards display `?` with an error instead of substituting fallback values.
+If any required payload is missing or invalid, the headline and affected data
+tiles display `?` with an error instead of substituting fallback values.
+
+Data at a Glance is a nested treemap grouped into Market Data (Kalshi and
+Polymarket), Inflation, Labor, Growth & Fiscal, Rates & Funding, and Policy
+Context. Signal summaries use a continuous 1-to-5 policy-pressure scale:
+1 favors lower rates, 3 is balanced, and 5 favors higher rates. Signed model
+biases are mapped linearly to this display scale and rounded to one decimal;
+forecast calculations are unchanged. Market scores use raise probability minus
+cut probability, with actual outcome odds shown separately. Original economic
+readings retain their units. Select a tile to inspect its date, readings, and
+source. Rectangle areas are presentation choices, not model weights or odds.
+Policy Context shows the last statement's existing 1-to-5 scores, not new data.
 
 ## Refresh schedule
 
@@ -95,20 +106,29 @@ python scripts\build-static-site.py --output-dir _site --cache-dir .refresh-cach
 
 ## Tech stack
 
+Dual Mandate is the first/default Signal Knowledge Graph experiment. Its factor
+circles are sized by fixed macro-model weight, keeping labor prominent even when
+its directional bias is near neutral. Factor colors and visible labels show
+less, neutral, or more hike pressure. Mandate-hub percentages summarize weighted
+signal attention, not decision probabilities; this visualization does not change
+forecast weights or estimate the impact of employment-data revisions.
+
 - **Python** for ingestion/export pipelines
 - **SQLite** for local persistence
 - **HTML/CSS/JavaScript** for the static dashboard
 - **Three.js** for the 3D knowledge graph
 
-## Meeting Evidence Explorer (Neo4j Aura)
+## Meeting evidence in Previous Meeting History (Neo4j Aura)
 
-The Meeting Evidence Explorer is a separate, selectable graph view under Data
-Visualization. Choose a completed meeting, then click or keyboard-select a node
-to follow the reconstructed model's inputs to dated observations and official
-source pages. The decision node represents the outcome, not evidence available
-before that meeting.
+Each meeting in Previous Meeting History has an expandable **Meeting evidence**
+card. Open it to load that meeting's economic inputs, observation periods,
+estimated availability dates, model biases, and official source links. Each
+signal also has an expandable view of its underlying values. There is no separate
+explorer tab or graph navigation.
 
-The first version covers meetings in the five-year backtest. It uses the same
+Evidence covers meetings in the five-year backtest; other meetings explicitly
+report that evidence is unavailable rather than substituting current data.
+The cards use the same static Neo4j graph export and
 lag-based observation selection as that backtest. Estimated availability dates
 are **not verified original release timestamps**, and values can include later
 revisions. Forecasts are retrospective reconstructions, not archived live
@@ -162,9 +182,9 @@ in the exported evidence payload to inspect one exact version.
 For hosted builds, configure repository Actions secrets named `NEO4J_URI`,
 `NEO4J_USERNAME`, `NEO4J_PASSWORD`, and `NEO4J_DATABASE`. The workflow installs the
 optional driver when `NEO4J_URI` is set. Configured connection/import failures
-stop the build; unconfigured builds explicitly show the explorer as unavailable.
+stop the build; unconfigured builds explicitly show meeting evidence as unavailable.
 If the backtest has no completed meetings, the build instead publishes an
-explicitly unavailable explorer and a partial-refresh warning, without attempting
+explicitly unavailable evidence view and a partial-refresh warning, without attempting
 an Aura import. Enable both `refresh_fed_history` and `refresh_backtest` in a
 manual workflow run to populate empty archives. Existing empty cached archives
 are reused on routine runs; adding Aura secrets alone does not populate them.

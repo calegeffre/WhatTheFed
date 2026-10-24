@@ -665,7 +665,8 @@ def build_site(
     shutil.copy2(REPO_ROOT / "index.html", output_dir / "index.html")
     assets_dir = output_dir / "assets"
     assets_dir.mkdir()
-    shutil.copy2(REPO_ROOT / "assets" / "meeting-evidence.js", assets_dir / "meeting-evidence.js")
+    for name in ("meeting-evidence.js", "data-treemap.js"):
+        shutil.copy2(REPO_ROOT / "assets" / name, assets_dir / name)
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
     database_files = [
         path

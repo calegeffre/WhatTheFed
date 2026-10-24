@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from whatthefed.prediction_history import MACRO_WEIGHTS
+
 
 def test_raw_data_source_links_are_the_first_column() -> None:
     html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
@@ -24,6 +26,92 @@ def test_raw_data_source_links_are_the_first_column() -> None:
     assert 'rel="noreferrer noopener"' in cells[0]
     assert '"n/a"' in cells[0]
     assert cells[1] == "${escHtml(row.dataset)}"
+
+
+def test_meeting_evidence_is_inside_each_history_card_instead_of_a_separate_tab() -> None:
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    start = html.index("    function renderTimeline()")
+    end = html.index("    function renderTabs()", start)
+    timeline = html[start:end]
+    assert 'class="meeting-evidence-card"' in timeline
+    assert 'data-meeting-date="${escHtml(meeting.meeting_date)}"' in timeline
+    assert timeline.index("renderFullCard") < timeline.index('class="meeting-evidence-card"')
+    assert timeline.index('class="meeting-evidence-card"') < timeline.index("meetingTimeline.appendChild")
+    assert 'data-viz="meeting-evidence"' not in html
+    assert 'id="viz-panel-meeting-evidence"' not in html
+    assert 'id="evidence-graph"' not in html
+
+
+def test_dual_mandate_is_first_and_experiment_links_match_their_numbers() -> None:
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    tabs = re.findall(
+        r'class="kg-tab[^"]*" data-kg-exp="([^"]+)">Experiment (\d+) · ([^<]+)</button>',
+        html,
+    )
+    titles = [
+        "Dual Mandate", "Bias Gradient", "Source Clusters", "Timeline Lanes",
+        "Contribution Sunburst", "Decision Funnel", "Monte Carlo Cloud", "Sensitivity Tornado",
+    ]
+    assert tabs == [(f"experiment-{index}", str(index), title) for index, title in enumerate(titles, 1)]
+    assert 'class="kg-tab kg-tab-active" data-kg-exp="experiment-1">Experiment 1 · Dual Mandate' in html
+    cards = re.findall(
+        r'<article class="experiment-details-card">\s*'
+        r'<span class="experiment-number">Experiment (\d+)</span>\s*'
+        r"<h3>([^<]+)</h3>.*?data-open-experiment=\"([^\"]+)\"",
+        html, re.DOTALL,
+    )
+    assert cards == [(str(index), title, f"experiment-{index}") for index, title in enumerate(titles, 1)]
+    assert sorted(re.findall(r"function buildGraphExperiment(\d+)\(", html)) == list("12345678")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is unavailable")
+@pytest.mark.parametrize("labor_bias", [-1.0, -0.0931, 0.0, 1.0])
+def test_dual_mandate_keeps_labor_prominent_without_changing_model_weights(labor_bias: float) -> None:
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    start = html.index("      function buildGraphExperiment1(scene, context)")
+    end = html.index("      // Shared model:", start)
+    context = {
+        "laborBias": labor_bias, "cpiBias": 0.2, "ppiBias": 1.0, "gdpBias": 0,
+        "fiscalBias": 0, "policyRateBias": 0, "treasurySlopeBias": 0, "breakevenBias": 0,
+    }
+    script = """
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const importanceRadius = (importance, min, max) => min + clamp(importance, 0, 1) * (max - min);
+const biasToColorHex = bias => bias;
+const addEdge = () => {};
+const addReferenceGrid = () => {};
+function makeNode(scene, x, y, z, color, radius, label, sublabel, hover = true) {
+  scene.push({ color, radius, label, sublabel, hover });
+}
+"""
+    script += f"const MACRO_WEIGHTS = Object.freeze({json.dumps(MACRO_WEIGHTS)});\n"
+    script += html[start:end]
+    script += (
+        f"const nodes = []; buildGraphExperiment1(nodes, {json.dumps(context)});\n"
+        "console.log(JSON.stringify({nodes, weights: MACRO_WEIGHTS}));"
+    )
+    result = subprocess.run(
+        [shutil.which("node"), "-e", script], check=True, capture_output=True, text=True,
+    )
+    payload = json.loads(result.stdout)
+    labor = next(node for node in payload["nodes"] if "labor" in node["label"].lower())
+    assert labor["radius"] == pytest.approx(0.38)
+    assert labor["color"] == labor_bias
+    assert labor["hover"] is False
+    assert "21% weight" in labor["label"]
+    assert payload["weights"] == MACRO_WEIGHTS
+    if labor_bias < 0:
+        assert "Cooler labor" in labor["label"]
+        assert "less hike pressure" in labor["sublabel"]
+    elif labor_bias > 0:
+        assert "Hotter labor" in labor["label"]
+        assert "more hike pressure" in labor["sublabel"]
+    else:
+        assert "Balanced labor" in labor["label"]
+        assert "neutral pressure" in labor["sublabel"]
+    if labor_bias == -0.0931:
+        previous_radius = 0.10 + (0.42 - 0.10) * (0.21 * (0.20 + 0.80 * abs(labor_bias)) / 0.12)
+        assert labor["radius"] > previous_radius
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is unavailable")
@@ -73,6 +161,7 @@ const document = {
   createElement() { return { innerHTML: "", className: "" }; },
 };
 const dashboardData = { meeting_history: [] };
+const escHtml = value => String(value);
 """
     script = (
         setup
@@ -155,6 +244,7 @@ const document = {
 };
 const dashboardData = { meeting_history: [] };
 const fedRateHistoryOverlay = null;
+const escHtml = value => String(value);
 """
     script += f"const window = {{ __FOMC_HISTORY_DATA__: {{ '2026': {json.dumps(meetings)} }} }};\n"
     script += html[start:end] + """

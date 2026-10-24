@@ -29,10 +29,11 @@ SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build-static-si
 def dashboard_assets(tmp_path: Path) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
-    (assets / "meeting-evidence.js").write_text(
-        (SCRIPT_PATH.parents[1] / "assets" / "meeting-evidence.js").read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
+    for name in ("meeting-evidence.js", "data-treemap.js"):
+        (assets / name).write_text(
+            (SCRIPT_PATH.parents[1] / "assets" / name).read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
 
 
 def _script_namespace() -> dict[str, object]:
@@ -290,6 +291,7 @@ def test_build_site_only_fetches_fred_on_explicit_refresh(
     )["meetings"]
     assert all((output_dir / "data" / name).is_file() for name in namespace["EXPECTED_PAYLOADS"])
     assert (output_dir / "index.html").is_file()
+    assert (output_dir / "assets/data-treemap.js").is_file()
     assert not list(output_dir.rglob("*.db"))
     assert len(namespace["read_payload"](
         output_dir / "data/model_probability_history_data.js"
