@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import closing
 import json
 import runpy
 import sqlite3
@@ -401,6 +402,96 @@ def _write_source_exports(namespace, arguments, overrides=None) -> None:
             namespace["write_payload"](payloads[path.name], path)
 
 
+@pytest.mark.parametrize("sources_available", [False, True])
+def test_empty_evidence_does_not_block_current_data_deployment(
+    tmp_path: Path, sources_available: bool, capsys
+) -> None:
+    namespace = _script_namespace()
+    build_site = namespace["build_site"]
+    output = tmp_path / "_site"
+    (tmp_path / "index.html").write_text("<html></html>")
+
+    def ingest(**kwargs):
+        if not sources_available:
+            raise TimeoutError("source unavailable")
+        _write_source_exports(namespace, kwargs["arguments"])
+
+    settings = Mock(return_value={"NEO4J_DATABASE": "test-db"})
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path,
+        "run_ingestion_command": ingest,
+        "load_settings": settings,
+    }), patch("whatthefed.meeting_evidence.connect") as connect:
+        build_site(output_dir=output, neo4j_env_file=tmp_path / ".env.neo4j")
+
+    connect.assert_not_called()
+    settings.assert_called_once_with(tmp_path / ".env.neo4j")
+    evidence = namespace["read_payload"](output / "data/meeting_evidence_data.js")
+    assert evidence["available"] is False
+    assert "refresh_fed_history and refresh_backtest" in evidence["reason"]
+    assert "Meeting evidence" in namespace["read_payload"](
+        output / "data/refresh_status_data.js"
+    )["failures"]
+    assert "Meeting evidence unavailable" in capsys.readouterr().out
+    assert (output / "index.html").is_file()
+    assert all((output / "data" / name).is_file() for name in namespace["EXPECTED_PAYLOADS"])
+    if sources_available:
+        assert namespace["read_payload"](output / "data/cpi_dashboard_data.js") == {
+            "metrics": {"cpi_bias": 0.2}
+        }
+
+
+@pytest.mark.parametrize("failure_stage", ["settings", "connection", "verification"])
+def test_configured_neo4j_errors_still_block_deployment(tmp_path: Path, failure_stage: str) -> None:
+    namespace = _script_namespace()
+    build_site = namespace["build_site"]
+    output = tmp_path / "_site"
+    (tmp_path / "index.html").write_text("<html></html>")
+    errors = {
+        "settings": ValueError("Missing Neo4j settings"),
+        "connection": ConnectionError("Aura unreachable"),
+        "verification": RuntimeError("Neo4j round-trip verification failed"),
+    }
+    error = errors[failure_stage]
+    settings = Mock(
+        side_effect=error if failure_stage == "settings" else None,
+        return_value={"NEO4J_DATABASE": "test-db"},
+    )
+    evidence = Mock(side_effect=error)
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path,
+        "run_ingestion_command": lambda **kwargs: _write_source_exports(namespace, kwargs["arguments"]),
+        "load_settings": settings,
+        "build_neo4j_evidence": evidence,
+    }):
+        with pytest.raises(type(error), match=str(error)):
+            build_site(output_dir=output, neo4j_env_file=tmp_path / ".env.neo4j")
+    assert not (output / "data/meeting_evidence_data.js").exists()
+    if failure_stage == "settings":
+        evidence.assert_not_called()
+    else:
+        evidence.assert_called_once_with(output / "data", settings.return_value)
+
+
+def test_verified_evidence_is_exported_without_partial_refresh_warning(tmp_path: Path) -> None:
+    namespace = _script_namespace()
+    build_site = namespace["build_site"]
+    output = tmp_path / "_site"
+    (tmp_path / "index.html").write_text("<html></html>")
+    verified = {"available": True, "backend": "Neo4j", "meetings": [{"meeting_date": "2024-03-20"}]}
+    evidence = Mock(return_value=verified)
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path,
+        "run_ingestion_command": lambda **kwargs: _write_source_exports(namespace, kwargs["arguments"]),
+        "load_settings": Mock(return_value={"NEO4J_DATABASE": "test-db"}),
+        "build_neo4j_evidence": evidence,
+    }):
+        build_site(output_dir=output, neo4j_env_file=tmp_path / ".env.neo4j")
+    assert namespace["read_payload"](output / "data/meeting_evidence_data.js") == verified
+    assert namespace["read_payload"](output / "data/refresh_status_data.js")["failures"] == []
+    evidence.assert_called_once()
+
+
 def test_cache_survives_multiple_runs_and_failed_partial_source(tmp_path: Path, capsys) -> None:
     namespace = _script_namespace()
     build_site = namespace["build_site"]
@@ -675,7 +766,7 @@ def test_no_cache_uses_disposable_database_outside_artifact(tmp_path: Path) -> N
         if "--db-path" in arguments:
             db_path = Path(arguments[arguments.index("--db-path") + 1])
             db_paths.append(db_path)
-            with sqlite3.connect(db_path) as connection:
+            with closing(sqlite3.connect(db_path)) as connection, connection:
                 connection.execute("CREATE TABLE IF NOT EXISTS observations (value INTEGER)")
         _write_source_exports(namespace, arguments)
 

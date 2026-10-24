@@ -59,12 +59,26 @@ LIMITATIONS = [
 ]
 
 
+class MeetingEvidenceUnavailable(ValueError):
+    """Raised when no completed backtest meetings are available for the explorer."""
+
+
 def build_evidence_graph(
     data_dir: Path,
     *,
     as_of: date | None = None,
 ) -> dict[str, object]:
     backtest = read_js_payload(data_dir / "data_backtest_data.js", "__DATA_BACKTEST_DATA__")
+    cutoff = as_of or date.today()
+    results = sorted(
+        (item for item in backtest["meetings"] if date.fromisoformat(item["meeting_date"]) <= cutoff),
+        key=lambda item: item["meeting_date"],
+    )
+    if not results:
+        raise MeetingEvidenceUnavailable(
+            "No completed meetings have evidence to import. Rebuild the Fed rate history "
+            "and backtest with refresh_fed_history and refresh_backtest in a manual workflow run."
+        )
     history = read_js_payload(data_dir / "fed_rate_history_data.js", "__FED_RATE_HISTORY_DATA__")
     targets = {item["meeting_date"]: item for item in history["meetings"]}
     observations = {}
@@ -75,7 +89,6 @@ def build_evidence_graph(
     nodes: dict[str, dict[str, object]] = {}
     edges: dict[tuple[str, str, str], dict[str, str]] = {}
     meetings = []
-    cutoff = as_of or date.today()
 
     def node(node_id: str, kind: str, label: str, **properties: object) -> str:
         nodes[node_id] = {"id": node_id, "kind": kind, "label": label, **properties}
@@ -86,10 +99,8 @@ def build_evidence_graph(
             "source": source, "target": target, "relation": relation,
         }
 
-    for result in sorted(backtest["meetings"], key=lambda item: item["meeting_date"]):
+    for result in results:
         meeting_date = date.fromisoformat(result["meeting_date"])
-        if meeting_date > cutoff:
-            continue
         target = targets[meeting_date.isoformat()]
         meeting_id = node(
             f"meeting:{meeting_date}", "meeting", meeting_date.isoformat(),
@@ -160,8 +171,6 @@ def build_evidence_graph(
             "predicted": result["predicted"],
         })
 
-    if not meetings:
-        raise ValueError("No completed meetings have evidence to import.")
     return {
         "meetings": meetings,
         "nodes": sorted(nodes.values(), key=lambda item: item["id"]),

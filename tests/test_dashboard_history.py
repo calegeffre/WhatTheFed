@@ -1,12 +1,29 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
+
+
+def test_raw_data_source_links_are_the_first_column() -> None:
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    start = html.index("    function drawRawDataTable()")
+    end = html.index("    function initKgExperimentTabs()", start)
+    table = html[start:end]
+    assert re.findall(r"<th>(.*?)</th>", table) == [
+        "Source Links", "Dataset", "As Of", "Metric", "ID", "Value", "Details",
+    ]
+    cells = re.findall(r"<td>(.*?)</td>", table, re.DOTALL)
+    assert len(cells) == 7
+    assert "row.sourceUrl" in cells[0]
+    assert 'rel="noreferrer noopener"' in cells[0]
+    assert '"n/a"' in cells[0]
+    assert cells[1] == "${escHtml(row.dataset)}"
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is unavailable")

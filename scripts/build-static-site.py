@@ -28,7 +28,11 @@ from whatthefed.prediction_history import (
 )
 from whatthefed.backtest import build_backtest_payload, load_backtest_inputs
 from whatthefed.fed_history import fetch_history_payload
-from whatthefed.meeting_evidence import build_neo4j_evidence, export_evidence_js
+from whatthefed.meeting_evidence import (
+    MeetingEvidenceUnavailable,
+    build_neo4j_evidence,
+    export_evidence_js,
+)
 from whatthefed.neo4j_connection import load_settings
 
 EXPECTED_PAYLOADS = (
@@ -626,11 +630,6 @@ def build_site(
         failures.append("Model snapshot")
         warn(f"Model snapshot skipped; preserving probability history: {error}")
 
-    write_payload(
-        {"generated_at": datetime.now(timezone.utc).isoformat(), "failures": list(dict.fromkeys(failures))},
-        data_dir / "refresh_status_data.js",
-    )
-
     if unknown_archives:
         raise RuntimeError(
             "Deployment withheld to preserve unavailable deployed archives: "
@@ -638,13 +637,22 @@ def build_site(
         )
 
     if neo4j_env_file is not None or os.environ.get("NEO4J_URI"):
-        evidence = build_neo4j_evidence(data_dir, load_settings(neo4j_env_file))
+        try:
+            evidence = build_neo4j_evidence(data_dir, load_settings(neo4j_env_file))
+        except MeetingEvidenceUnavailable as error:
+            failures.append("Meeting evidence")
+            warn(f"Meeting evidence unavailable: {error}")
+            evidence = {"available": False, "reason": str(error)}
     else:
         evidence = {
             "available": False,
             "reason": "Neo4j evidence is not configured for this build.",
         }
     export_evidence_js(evidence, data_dir / "meeting_evidence_data.js")
+    write_payload(
+        {"generated_at": datetime.now(timezone.utc).isoformat(), "failures": list(dict.fromkeys(failures))},
+        data_dir / "refresh_status_data.js",
+    )
 
     missing = [
         name

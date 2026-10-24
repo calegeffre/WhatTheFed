@@ -53,7 +53,7 @@ jobs:
           python-version: "3.12"
 
       - name: Restore saved refresh data
-        uses: actions/cache/restore@v4.3.0
+        uses: actions/cache/restore@v6.1.0
         with:
           path: .refresh-cache
           key: refresh-data-v1-${{ github.run_id }}-${{ github.run_attempt }}
@@ -86,19 +86,20 @@ jobs:
 
       - name: Save successful refresh data even after failures
         if: ${{ always() }}
-        uses: actions/cache/save@v4.3.0
+        uses: actions/cache/save@v6.1.0
         with:
           path: .refresh-cache
           key: refresh-data-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
           retention-days: 1
+          include-hidden-files: true
 
   deploy:
     environment:
@@ -109,4 +110,4 @@ jobs:
     steps:
       - name: Deploy GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

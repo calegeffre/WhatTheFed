@@ -163,6 +163,11 @@ For hosted builds, configure repository Actions secrets named `NEO4J_URI`,
 `NEO4J_USERNAME`, `NEO4J_PASSWORD`, and `NEO4J_DATABASE`. The workflow installs the
 optional driver when `NEO4J_URI` is set. Configured connection/import failures
 stop the build; unconfigured builds explicitly show the explorer as unavailable.
+If the backtest has no completed meetings, the build instead publishes an
+explicitly unavailable explorer and a partial-refresh warning, without attempting
+an Aura import. Enable both `refresh_fed_history` and `refresh_backtest` in a
+manual workflow run to populate empty archives. Existing empty cached archives
+are reused on routine runs; adding Aura secrets alone does not populate them.
 Only public economic evidence and source metadata belong in this graph: its
 export is published on GitHub Pages. The browser never connects to Aura or
 receives credentials.

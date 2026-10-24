@@ -2531,17 +2531,17 @@
         .map(
           (row) => `
             <tr>
+              <td>${
+                row.sourceUrl
+                  ? `<a href="${escHtml(row.sourceUrl)}" target="_blank" rel="noreferrer noopener">link</a>`
+                  : "n/a"
+              }</td>
               <td>${escHtml(row.dataset)}</td>
               <td>${escHtml(row.asOf)}</td>
               <td>${escHtml(row.metric)}</td>
               <td>${escHtml(row.key)}</td>
               <td>${escHtml(String(row.value))}</td>
               <td>${escHtml(row.details)}</td>
-              <td>${
-                row.sourceUrl
-                  ? `<a href="${escHtml(row.sourceUrl)}" target="_blank" rel="noreferrer noopener">link</a>`
-                  : "n/a"
-              }</td>
             </tr>
           `
         )
@@ -2552,13 +2552,13 @@
         <table class="raw-data-table">
           <thead>
             <tr>
+              <th>Source Links</th>
               <th>Dataset</th>
               <th>As Of</th>
               <th>Metric</th>
               <th>ID</th>
               <th>Value</th>
               <th>Details</th>
-              <th>Source</th>
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>

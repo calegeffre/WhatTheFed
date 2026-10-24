@@ -4,7 +4,12 @@ from datetime import date
 import pytest
 
 from whatthefed.backtest import HISTORY_GLOBALS
-from whatthefed.meeting_evidence import build_evidence_graph, export_evidence_js, sync_and_read_graph
+from whatthefed.meeting_evidence import (
+    MeetingEvidenceUnavailable,
+    build_evidence_graph,
+    export_evidence_js,
+    sync_and_read_graph,
+)
 from whatthefed.neo4j_connection import load_settings
 
 
@@ -60,8 +65,22 @@ def test_graph_rejects_unreleased_monthly_evidence(tmp_path):
 
 def test_graph_excludes_future_meetings(tmp_path):
     evidence_inputs(tmp_path)
-    with pytest.raises(ValueError, match="No completed meetings"):
+    with pytest.raises(MeetingEvidenceUnavailable, match="No completed meetings"):
         build_evidence_graph(tmp_path, as_of=date(2024, 2, 1))
+
+
+def test_empty_backtest_reports_unavailable_before_loading_other_inputs(tmp_path):
+    write_payload(tmp_path / "data_backtest_data.js", "__DATA_BACKTEST_DATA__", {"meetings": []})
+    with pytest.raises(MeetingEvidenceUnavailable, match="refresh_fed_history and refresh_backtest"):
+        build_evidence_graph(tmp_path)
+
+
+def test_missing_observation_for_completed_meeting_is_not_treated_as_unavailable(tmp_path):
+    evidence_inputs(tmp_path)
+    filename, global_name, history_key, _ = HISTORY_GLOBALS["cpi"]
+    write_payload(tmp_path / filename, global_name, {history_key: []})
+    with pytest.raises(KeyError):
+        build_evidence_graph(tmp_path, as_of=date(2024, 3, 21))
 
 
 def test_export_contains_only_supplied_public_payload(tmp_path):
