@@ -1125,6 +1125,18 @@
     const dashboardData = {
       meeting_history: [
         {
+          label: "October 2026",
+          date: "October 28, 2026",
+          decision: "hold",
+          official_vote: "10-2",
+          url: "https://www.federalreserve.gov/newsevents/pressreleases/monetary20261028a.htm",
+          summary:
+            "The Committee maintained the target range at 3-3/4 to 4 percent, citing strong economic activity, resilient domestic spending, steady unemployment, and still-elevated inflation.",
+          dissent_note:
+            "Lisa D. Cook and Beth M. Hammack dissented, preferring a 25 bp rate increase.",
+          votes: ["hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "hold", "raise", "raise"],
+        },
+        {
           label: "September 2026",
           date: "September 16, 2026",
           decision: "raise",
@@ -2770,7 +2782,7 @@
       // Published FOMC meeting dates used to project forward beyond the market's target meeting.
       const FOMC_SCHEDULE = [
         "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17", "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
-        "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-16", "2027-07-28", "2027-09-22", "2027-11-03", "2027-12-15",
+        "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-09", "2027-07-28", "2027-09-15", "2027-10-27", "2027-12-08",
       ];
       const DECISION_BIAS = { raise: 1, hold: 0, cut: -1 };
       const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

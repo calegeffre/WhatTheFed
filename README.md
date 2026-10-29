@@ -78,12 +78,14 @@ existing history with an empty archive. The next run retries retrieval.
 
 Historical Fed target rates are not pulled from FRED on routine runs because
 that download repeatedly times out. Builds reuse the deployed rate archive and
-backtest instead. Recent FOMC decisions are saved and displayed independently of
-that archive. The rate decision chart also uses target ranges parsed directly
-from those official statements, so recent rates remain visible when FRED or
-unrelated imports fail. Unparseable ranges are omitted, not estimated. If no rate
-archive exists, older rate history and an uncached backtest remain unavailable;
-current data still refreshes. To rebuild the archive,
+backtest instead. Recent official statement target ranges are merged into that
+archive without removing older meetings. The backtest is refreshed when a newly
+completed decision or a corrected historical outcome is available; failures
+retain the last successful results. The rate decision chart also reads official
+statement targets independently, so recent rates remain visible when FRED or
+unrelated imports fail. Unparseable ranges are omitted, not estimated. Without
+an older archive, coverage begins with the available parsed statements.
+To rebuild the full archive,
 select `refresh_fed_history` in a manual workflow run (or pass
 `--refresh-fed-history` locally). Select `refresh_backtest` as well to recalculate
 the backtest. Historical refreshes run after current ingestion; a timeout retains
@@ -186,8 +188,9 @@ stop the build; unconfigured builds explicitly show meeting evidence as unavaila
 If the backtest has no completed meetings, the build instead publishes an
 explicitly unavailable evidence view and a partial-refresh warning, without attempting
 an Aura import. Enable both `refresh_fed_history` and `refresh_backtest` in a
-manual workflow run to populate empty archives. Existing empty cached archives
-are reused on routine runs; adding Aura secrets alone does not populate them.
+manual workflow run to rebuild the full archives. Routine runs can populate
+recent evidence once official statement ranges and complete lagged macro
+histories are available; adding Aura secrets alone does not supply missing data.
 Only public economic evidence and source metadata belong in this graph: its
 export is published on GitHub Pages. The browser never connects to Aura or
 receives credentials.

@@ -12,6 +12,24 @@ import pytest
 from whatthefed.prediction_history import MACRO_WEIGHTS
 
 
+def test_october_decision_has_ten_hold_votes_and_two_named_hike_dissents() -> None:
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    october = html[html.index('label: "October 2026"'):html.index('label: "September 2026"')]
+    assert 'official_vote: "10-2"' in october
+    assert 'decision: "hold"' in october
+    votes = re.search(r"votes: (\[.*?\])", october).group(1)
+    assert json.loads(votes).count("hold") == 10
+    assert json.loads(votes).count("raise") == 2
+    assert "Lisa D. Cook and Beth M. Hammack" in october
+    assert "monetary20261028a.htm" in october
+    schedule = re.search(r"const FOMC_SCHEDULE = (\[.*?\]);", html, re.DOTALL).group(1)
+    dates = re.findall(r'"(\d{4}-\d{2}-\d{2})"', schedule)
+    assert [day for day in dates if day > "2026-10-28"] == [
+        "2026-12-09", "2027-01-27", "2027-03-17", "2027-04-28",
+        "2027-06-09", "2027-07-28", "2027-09-15", "2027-10-27", "2027-12-08",
+    ]
+
+
 def test_raw_data_source_links_are_the_first_column() -> None:
     html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
     start = html.index("    function drawRawDataTable()")

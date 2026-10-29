@@ -360,6 +360,60 @@ def has_valid_target_range(meeting) -> bool:
     )
 
 
+def merge_statement_rate_history(
+    archive: dict[str, object], statements: dict[str, object], *, as_of: date,
+) -> dict[str, object]:
+    confirmed = [
+        item for group in statements.values() for item in group
+        if has_valid_target_range(item)
+        and item.get("decision") in {"raise", "hold", "cut"}
+        and item.get("source_url")
+        and date.fromisoformat(item["meeting_date"]) <= as_of
+    ]
+    if not confirmed:
+        return archive
+    merged = merge_meetings(archive, {"meetings": confirmed})
+    statement_dates = {item["meeting_date"] for item in confirmed}
+    previous = None
+    for item in merged["meetings"]:
+        if item["meeting_date"] in statement_dates:
+            if item["decision"] == "hold":
+                item["change_bps"] = 0
+            elif previous is not None:
+                delta = (item["target_lower"] + item["target_upper"]
+                         - previous["target_lower"] - previous["target_upper"]) / 2
+                item["change_bps"] = round(delta * 100)
+        if has_valid_target_range(item):
+            previous = item
+    if not archive["meetings"]:
+        merged["methodology"] = (
+            "Target ranges parsed from official FOMC statements. Older meetings are "
+            "retained when an existing Fed/FRED rate archive is available."
+        )
+    return merged
+
+
+def backtest_needs_update(
+    backtest: dict[str, object] | None, rate_history: dict[str, object], *, as_of: date,
+) -> bool:
+    completed = [
+        item for item in rate_history["meetings"]
+        if has_valid_target_range(item)
+        and item.get("decision") in {"raise", "hold", "cut"}
+        and date.fromisoformat(item["meeting_date"]) <= as_of
+    ]
+    if not completed:
+        return False
+    results = {item["meeting_date"]: item for item in (backtest or {}).get("meetings", [])}
+    last_result = max(results, default="")
+    return any(
+        item["meeting_date"] > last_result
+        or (item["meeting_date"] in results
+            and results[item["meeting_date"]].get("actual") != item["decision"])
+        for item in completed
+    )
+
+
 def build_site(
     *,
     output_dir: Path,
@@ -592,6 +646,11 @@ def build_site(
         except Exception as error:
             failures.append("Fed rate history")
             warn(f"Fed rate history refresh failed; retaining archive: {error}")
+    if ("fomc_history_data.js" in fresh_payloads
+            or "fomc_history_data.js" in cached_sources):
+        fed_history = merge_statement_rate_history(
+            fed_history, read_payload(data_dir / "fomc_history_data.js"), as_of=today,
+        )
     if not fed_history["meetings"]:
         warn("Fed rate history unavailable; historical views are disabled.")
     if "fed_rate_history_data.js" not in unknown_archives:
@@ -599,7 +658,9 @@ def build_site(
 
     backtest = existing_backtest or {"meetings": []}
     try:
-        if refresh_backtest or existing_backtest is None:
+        if refresh_backtest or existing_backtest is None or backtest_needs_update(
+            existing_backtest, fed_history, as_of=today,
+        ):
             if fed_history["meetings"]:
                 backtest = resolve_backtest_payload(data_dir, None, as_of=today)
         validate_archive("data_backtest_data.js", backtest)

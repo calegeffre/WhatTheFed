@@ -40,6 +40,110 @@ def _script_namespace() -> dict[str, object]:
     return runpy.run_path(str(SCRIPT_PATH), run_name="build_static_site")
 
 
+def test_statement_targets_preserve_older_rates_and_exclude_future_or_missing_ranges() -> None:
+    namespace = _script_namespace()
+    archive = {"methodology": "Existing archive", "meetings": [{
+        "meeting_date": "2026-07-29", "target_lower": 3.5, "target_upper": 3.75,
+        "decision": "hold", "note": "Preserve archive metadata",
+    }]}
+    statements = {"2026": [
+        {"meeting_date": "2026-09-16", "target_lower": 3.75, "target_upper": 4.0,
+         "decision": "raise", "source_url": "https://www.federalreserve.gov/september"},
+        {"meeting_date": "2026-10-28", "target_lower": 3.75, "target_upper": 4.0,
+         "decision": "hold", "vote_tally": "10-2",
+         "source_url": "https://www.federalreserve.gov/october"},
+        {"meeting_date": "2026-12-09", "target_lower": 4.0, "target_upper": 4.25,
+         "decision": "raise", "source_url": "https://www.federalreserve.gov/future"},
+        {"meeting_date": "2026-06-17", "decision": "hold",
+         "source_url": "https://www.federalreserve.gov/no-range"},
+    ]}
+    original = deepcopy(archive)
+    merged = namespace["merge_statement_rate_history"](
+        archive, statements, as_of=date(2026, 10, 28),
+    )
+    assert archive == original
+    assert merged["methodology"] == "Existing archive"
+    assert [item["meeting_date"] for item in merged["meetings"]] == [
+        "2026-07-29", "2026-09-16", "2026-10-28",
+    ]
+    assert merged["meetings"][0]["note"] == "Preserve archive metadata"
+    assert merged["meetings"][1]["change_bps"] == 25
+    assert merged["meetings"][2]["change_bps"] == 0
+    assert merged["meetings"][2]["vote_tally"] == "10-2"
+
+
+@pytest.mark.parametrize(("results", "needs_update"), [
+    ([], True),
+    ([{"meeting_date": "2026-09-16", "actual": "raise"}], True),
+    ([{"meeting_date": "2026-10-28", "actual": "hold"}], False),
+    ([{"meeting_date": "2026-10-28", "actual": "raise"}], True),
+])
+def test_backtest_detects_new_or_corrected_completed_decisions(results, needs_update) -> None:
+    namespace = _script_namespace()
+    history = {"meetings": [
+        {"meeting_date": "2026-10-28", "decision": "hold",
+         "target_lower": 3.75, "target_upper": 4.0},
+        {"meeting_date": "2026-12-09", "decision": "raise",
+         "target_lower": 4.0, "target_upper": 4.25},
+    ]}
+    assert namespace["backtest_needs_update"](
+        {"meetings": results}, history, as_of=date(2026, 10, 28),
+    ) is needs_update
+
+
+@pytest.mark.parametrize("existing_archive", [False, True])
+def test_build_rolls_decision_into_history_and_backtest_without_a_fred_rebuild(
+    tmp_path: Path, existing_archive: bool,
+) -> None:
+    namespace = _script_namespace()
+    build_site = namespace["build_site"]
+    (tmp_path / "index.html").write_text("<html></html>")
+    cache = tmp_path / ".refresh-cache"
+    september = {
+        "meeting_date": "2026-09-16", "decision": "raise",
+        "target_lower": 3.75, "target_upper": 4.0,
+    }
+    namespace["write_payload"](
+        {"meetings": [september] if existing_archive else []},
+        cache / "data/fed_rate_history_data.js",
+    )
+    namespace["write_payload"](
+        {"meetings": [{"meeting_date": "2026-09-16", "actual": "raise"}]
+         if existing_archive else []},
+        cache / "data/data_backtest_data.js",
+    )
+    october = {
+        "meeting_date": "2026-10-28", "decision": "hold", "vote_tally": "10-2",
+        "target_lower": 3.75, "target_upper": 4.0,
+        "source_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20261028a.htm",
+    }
+
+    def ingest(**kwargs):
+        _write_source_exports(
+            namespace, kwargs["arguments"], {"fomc_history_data.js": {"2026": [october]}},
+        )
+
+    resolver = Mock(return_value={"meetings": [{
+        "meeting_date": "2026-10-28", "actual": "hold",
+    }]})
+    fred = Mock()
+    clock = Mock(wraps=date)
+    clock.today.return_value = date(2026, 10, 28)
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path, "date": clock, "run_ingestion_command": ingest,
+        "fetch_history_payload": fred, "resolve_backtest_payload": resolver,
+    }):
+        build_site(output_dir=tmp_path / "_site", cache_dir=cache)
+        resolver.assert_called_once()
+        history = namespace["read_payload"](cache / "data/fed_rate_history_data.js")
+        assert history["meetings"][-1] == {**october, "change_bps": 0}
+        assert len(history["meetings"]) == (2 if existing_archive else 1)
+        resolver.reset_mock()
+        build_site(output_dir=tmp_path / "_site", cache_dir=cache)
+        resolver.assert_not_called()
+    fred.assert_not_called()
+
+
 def test_ingestion_command_retries_then_succeeds() -> None:
     run_ingestion_command = _script_namespace()["run_ingestion_command"]
     failure = subprocess.CalledProcessError(1, ["python", "-m", "example"])

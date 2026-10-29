@@ -145,6 +145,41 @@ class FOMCIngestionTests(unittest.TestCase):
         self.assertEqual(statement.decision, "hold")
         self.assertEqual(statement.vote_tally, "8-4")
 
+    def test_october_hold_and_hawkish_dissent_are_exported_correctly(self) -> None:
+        html = """
+        <div id="article">
+          <p class="article__time">October 28, 2026</p>
+          <h3 class="title">Federal Reserve issues FOMC statement</h3>
+          <p>The Federal Open Market Committee approved the following statement
+          for release by a 10 \u2013 2 vote:</p>
+          <p>The Committee decided to maintain the target range for the federal
+          funds rate at 3-3/4 to 4 percent.</p>
+          <p>Voting against the monetary policy action were Lisa D. Cook and
+          Beth M. Hammack, who preferred to raise the target range for the
+          federal funds rate by 1/4 percentage point at this meeting.</p>
+        </div>
+        """
+        statement = parse_statement_html(
+            f"{FOMC_BASE_URL}/newsevents/pressreleases/monetary20261028a.htm", html,
+        )
+        self.assertEqual(statement.meeting_date, "2026-10-28")
+        self.assertEqual(statement.decision, "hold")
+        self.assertEqual(statement.vote_tally, "10-2")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "fomc.db"
+            FOMCStatementStore(db_path).write_statement(statement)
+            dashboard = export_dashboard_fomc_js(
+                db_path=db_path, output_js_path=Path(temp_dir) / "dashboard.js",
+            )
+            history = export_dashboard_fomc_history_js(
+                db_path=db_path, output_js_path=Path(temp_dir) / "history.js",
+            )
+        self.assertEqual(dashboard["decision"], "hold")
+        self.assertEqual(dashboard["signals"][-1]["display"], "+0.17")
+        self.assertEqual(history["2026"][0]["target_lower"], 3.75)
+        self.assertEqual(history["2026"][0]["target_upper"], 4.0)
+        self.assertEqual(history["2026"][0]["vote_tally"], "10-2")
+
     def test_exports_dashboard_signal_js_payload(self) -> None:
         statement = parse_statement_html(
             f"{FOMC_BASE_URL}/newsevents/pressreleases/monetary20260617a.htm",
