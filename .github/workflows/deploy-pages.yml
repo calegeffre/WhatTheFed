@@ -6,8 +6,9 @@ on:
     paths:
       - "index.html"
       - "assets/**"
+      - "data/**"
       - "requirements-neo4j.txt"
-      - "config/**"
+      - "config/**" 
       - "scripts/build-static-site.py"
       - "whatthefed/**"
       - ".github/workflows/deploy-pages.yml"
