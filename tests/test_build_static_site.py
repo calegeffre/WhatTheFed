@@ -405,6 +405,63 @@ def test_build_site_only_fetches_fred_on_explicit_refresh(
     assert datetime.fromisoformat(status["generated_at"]).tzinfo is not None
 
 
+@pytest.mark.parametrize("with_cache", [False, True])
+def test_build_site_merges_checked_in_rate_history_with_saved_archive(
+    tmp_path: Path, with_cache: bool,
+) -> None:
+    namespace = _script_namespace()
+    build_site = namespace["build_site"]
+    (tmp_path / "index.html").write_text("<html></html>")
+    cache = tmp_path / ".refresh-cache" if with_cache else None
+    historical = {
+        "meeting_date": "2006-06-29", "decision": "raise",
+        "target_lower": 5.25, "target_upper": 5.25,
+    }
+    recent = {
+        "meeting_date": "2026-09-16", "decision": "hold",
+        "target_lower": 3.75, "target_upper": 4.0,
+    }
+    namespace["write_payload"](
+        {"meetings": [historical, {**recent, "target_upper": 3.75}]},
+        tmp_path / "data" / "fed_rate_history_data.js",
+    )
+    saved = {"meetings": [recent]}
+    if cache is not None:
+        namespace["write_payload"](saved, cache / "data" / "fed_rate_history_data.js")
+    fetch_saved = Mock(return_value=saved)
+    fetch_fred = Mock()
+
+    def ingest(**kwargs):
+        _write_source_exports(
+            namespace, kwargs["arguments"], {"fomc_history_data.js": {"2026": []}},
+        )
+
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path,
+        "run_ingestion_command": ingest,
+        "fetch_existing_history": Mock(return_value={"snapshots": []}),
+        "fetch_existing_backtest": Mock(return_value={"meetings": []}),
+        "fetch_existing_meetings": fetch_saved,
+        "fetch_history_payload": fetch_fred,
+        "resolve_backtest_payload": Mock(return_value={"meetings": []}),
+    }):
+        build_site(
+            output_dir=tmp_path / "_site", cache_dir=cache,
+            fed_history_source_url="https://example.test/history.js",
+        )
+
+    result = namespace["read_payload"](tmp_path / "_site/data/fed_rate_history_data.js")
+    assert result["meetings"] == [historical, recent]
+    assert result["coverage_start"] == "2006-06-29"
+    assert result["coverage_end"] == "2026-09-16"
+    fetch_fred.assert_not_called()
+    if with_cache:
+        fetch_saved.assert_not_called()
+        assert namespace["read_payload"](cache / "data/fed_rate_history_data.js") == result
+    else:
+        fetch_saved.assert_called_once()
+
+
 @pytest.mark.parametrize("with_archive", [False, True])
 def test_explicit_fed_history_refresh_failure_completes_build(
     tmp_path: Path, with_archive: bool, capsys

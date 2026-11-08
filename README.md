@@ -61,10 +61,13 @@ to refresh successfully. If an existing archive cannot be retrieved and no saved
 copy exists, publication stops to avoid erasing history; successful ingestion is
 still saved for the next run.
 
-Routine runs reuse the rate archive rather than download timeout-prone FRED
-history. Official statement targets extend the archive and independently feed
-the rate chart; unparseable ranges are omitted. Without a saved archive, coverage
-begins with parsed statements. New or corrected outcomes trigger a backtest refresh.
+Routine runs merge the checked-in `data/fed_rate_history_data.js` with the saved
+rate archive rather than download timeout-prone FRED history. Saved entries take
+precedence on matching dates, while older checked-in history remains available
+even when the cache or deployed archive only covers recent years. Official
+statement targets extend the archive and independently feed the rate chart;
+unparseable ranges are omitted. Without either archive, coverage begins with
+parsed statements. New or corrected outcomes trigger a backtest refresh.
 
 To rebuild full history, enable `refresh_fed_history` and `refresh_backtest` in a
 manual run (locally: `--refresh-fed-history --refresh-backtest`). Historical

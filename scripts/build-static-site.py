@@ -633,6 +633,9 @@ def build_site(
         failures=failures, label="Fed rate history archive",
         unknown_archives=unknown_archives,
     )
+    checked_in_history = REPO_ROOT / "data" / "fed_rate_history_data.js"
+    if checked_in_history.exists():
+        fed_history = merge_meetings(read_payload(checked_in_history), fed_history)
     if refresh_fed_history:
         try:
             refreshed = fetch_history_payload(start_year=1982)
