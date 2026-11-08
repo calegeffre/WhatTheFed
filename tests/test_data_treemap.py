@@ -32,6 +32,29 @@ def test_treemap_is_loaded_as_a_public_asset_with_an_explained_scale() -> None:
     assert "Rectangle sizes organize information, not forecast weights" in html
 
 
+def test_treemap_precedes_predictions_below_the_branded_heading() -> None:
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert "<title>WhatTheFed Dashboard</title>" in html
+    assert "Next Meeting Heat Map" not in html
+    landmarks = [
+        '<div class="eyebrow">WhatTheFed</div>',
+        "<h1>Fed Heat Map</h1>",
+        '<div class="eyebrow">Data at a glance</div>',
+        'id="data-treemap"',
+        "What the market says",
+        "What the data says",
+        'id="sources"',
+        '<div class="eyebrow">Data Visualization</div>',
+    ]
+    positions = [html.index(landmark) for landmark in landmarks]
+    assert positions == sorted(positions)
+    for element_id in [
+        "market-prediction-title", "market-confidence", "market-rationale",
+        "data-prediction-title", "data-confidence", "data-rationale", "sources",
+    ]:
+        assert html.count(f'id="{element_id}"') == 1
+
+
 @requires_node
 def test_policy_scale_is_monotonic_and_preserves_mild_cooling() -> None:
     scores = run_helpers(

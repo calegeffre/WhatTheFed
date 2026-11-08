@@ -6,7 +6,7 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 
 - **Federal Reserve**: official FOMC statement pages and monthly event calendars
 - **BLS**: CPI, PPI, and labor time-series data
-- **U.S. Treasury**: daily par yield curve rates (1 Mo through 30 Yr), plus TIPS real yields used to derive breakeven inflation expectations
+- **U.S. Treasury**: daily nominal and TIPS real yields; derived breakeven inflation
 - **Treasury Fiscal Data**: Monthly Treasury Statement receipts, outlays, and deficit/surplus
 - **BEA**: quarterly real GDP growth and major demand components
 - **NY Fed**: overnight reference rates (EFFR, SOFR, OBFR, BGCR, TGCR) and the published FOMC target band
@@ -14,8 +14,7 @@ WhatTheFed is a lightweight Fed dashboard that combines official policy text, ma
 
 ## Prediction model
 
-The headline prediction uses the same all-data ensemble as the Monte Carlo and
-sensitivity experiments:
+The headline prediction, Monte Carlo, and sensitivity experiments share this ensemble:
 
 ```text
 macro bias  = 24% CPI + 12% PPI + 21% labor + 12% GDP
@@ -26,33 +25,24 @@ final bias  = 45% market bias + 55% policy bias
 market bias = P(raise) - P(cut)
 ```
 
-Every input is normalized to a `-1` (dovish/cut) to `+1` (hawkish/raise) scale.
-The final bias is converted to raise/hold/cut probabilities with a softmax that
-preserves a modest neutral preference for holding (`0.30` utility, reduced from
-the original `0.45`). Experiment 7 applies empirical
-shocks to this baseline over 520 deterministic Monte Carlo draws.
-Each hosted refresh also appends the resulting raise/hold/cut probabilities to
-the deployed model-history payload. The dashboard charts those snapshots by
-target FOMC meeting so changes in the model can be followed into each decision.
-If any required payload is missing or invalid, the headline and affected data
-tiles display `?` with an error instead of substituting fallback values.
+Inputs range from `-1` (dovish/cut) to `+1` (hawkish/raise). A softmax converts
+the final bias to raise/hold/cut probabilities with a `0.30` hold preference.
+Experiment 7 applies empirical shocks over 520 deterministic Monte Carlo draws.
+Successful refreshes append probability snapshots, charted by target meeting.
+Missing or invalid required inputs display `?` with an error, not fallback values.
 
 Data at a Glance is a nested treemap grouped into Market Data (Kalshi and
 Polymarket), Inflation, Labor, Growth & Fiscal, Rates & Funding, and Policy
-Context. Signal summaries use a continuous 1-to-5 policy-pressure scale:
-1 favors lower rates, 3 is balanced, and 5 favors higher rates. Signed model
-biases are mapped linearly to this display scale and rounded to one decimal;
-forecast calculations are unchanged. Market scores use raise probability minus
-cut probability, with actual outcome odds shown separately. Original economic
-readings retain their units. Select a tile to inspect its date, readings, and
-source. Rectangle areas are presentation choices, not model weights or odds.
-Policy Context shows the last statement's existing 1-to-5 scores, not new data.
+Context. Scores map model biases linearly to a 1-to-5 pressure scale: 1 favors
+lower rates, 3 is balanced, and 5 favors higher rates. Market scores use
+`P(raise) - P(cut)`; odds and economic readings retain their units. Select a tile
+for dates, readings, and sources. Tile areas are not model weights or odds.
+Policy Context reflects the last FOMC statement, not current economic data.
 
 ## Refresh schedule
 
-GitHub Actions is the primary ingestion and deployment path. The
-`.github/workflows/deploy-pages.yml` workflow rebuilds current data sources using
-a saved SQLite database, then deploys the generated browser assets to GitHub Pages.
+`.github/workflows/deploy-pages.yml` refreshes data using saved SQLite observations
+and deploys the static dashboard to GitHub Pages.
 
 | Trigger | Cadence |
 | --- | --- |
@@ -61,44 +51,33 @@ a saved SQLite database, then deploys the generated browser assets to GitHub Pag
 | Relevant changes on `main` | After each push |
 | Manual refresh | `workflow_dispatch` from GitHub Actions |
 
-The PowerShell ingestion scripts remain available for manually refreshing the
-local database. Windows Task Scheduler registration scripts are optional and
-are not required for the hosted dashboard.
+PowerShell scripts support local ingestion; Windows Task Scheduler is optional.
 
-Hosted ingestion retries a failed source up to three times for transient
-provider errors. If all attempts fail, other sources continue refreshing. Successful
-outputs and observations are saved in `.refresh-cache` and restored on the next
-Actions run. Failed sources retain their last saved payload, or remain unavailable
-if none exists; a visible partial-refresh notice warns that retained data may be
-stale. Model probability snapshots are appended only when all required current
-model inputs refresh successfully.
-If a deployed archive cannot be retrieved and no saved copy exists, ingestion
-still saves successful data, but publication stops to avoid replacing unknown
-existing history with an empty archive. The next run retries retrieval.
+Source failures are retried up to three times without blocking other sources.
+Failed sources retain saved payloads or remain unavailable, with a visible
+partial-refresh warning. Probability snapshots require all current model inputs
+to refresh successfully. If an existing archive cannot be retrieved and no saved
+copy exists, publication stops to avoid erasing history; successful ingestion is
+still saved for the next run.
 
-Historical Fed target rates are not pulled from FRED on routine runs because
-that download repeatedly times out. Builds reuse the deployed rate archive and
-backtest instead. Recent official statement target ranges are merged into that
-archive without removing older meetings. The backtest is refreshed when a newly
-completed decision or a corrected historical outcome is available; failures
-retain the last successful results. The rate decision chart also reads official
-statement targets independently, so recent rates remain visible when FRED or
-unrelated imports fail. Unparseable ranges are omitted, not estimated. Without
-an older archive, coverage begins with the available parsed statements.
-To rebuild the full archive,
-select `refresh_fed_history` in a manual workflow run (or pass
-`--refresh-fed-history` locally). Select `refresh_backtest` as well to recalculate
-the backtest. Historical refreshes run after current ingestion; a timeout retains
-the saved archive and does not prevent deployment of successful current data.
+Routine runs reuse the rate archive rather than download timeout-prone FRED
+history. Official statement targets extend the archive and independently feed
+the rate chart; unparseable ranges are omitted. Without a saved archive, coverage
+begins with parsed statements. New or corrected outcomes trigger a backtest refresh.
+
+To rebuild full history, enable `refresh_fed_history` and `refresh_backtest` in a
+manual run (locally: `--refresh-fed-history --refresh-backtest`). Historical
+refresh failures retain saved results and do not block successful current data.
 
 ## Storage and outputs
 
 - Data is stored in **SQLite** at `data/market_snapshots.db` (statements, macro observations, market snapshots, and derived records).
 - Browser-ready payloads are exported to `data/*.js` and loaded by `index.html`.
-- A graph payload is also exported for the knowledge-graph view.
-- The official Fed calendar is checked for upcoming speeches from all Board speakers, with Chair events highlighted and official livestream links retained.
-- Hosted builds restore and save `.refresh-cache` with Actions cache, including SQLite observations and browser payloads, even if a later build step fails. Actions caches can be evicted; this is not a permanent backup. Only `index.html` plus generated JavaScript payloads are uploaded to Pages; the database is never included.
-- Model probability history is carried forward from saved data or the currently deployed Pages payload and extended only after successful current-source ingestion. Retrieval failures retain saved history rather than erase it.
+- Graph payloads support the knowledge-graph and meeting-evidence views.
+- The Fed calendar supplies Board speeches, Chair highlights, and official livestream links.
+- Hosted builds save observations and payloads in `.refresh-cache`, even after later failures. Actions cache can be evicted and is not a permanent backup.
+- Pages publishes static HTML, assets, and generated JavaScript, never the database.
+- Model probability history is preserved from cache or deployed Pages payloads.
 
 Build the same static artifact locally with:
 
@@ -108,34 +87,26 @@ python scripts\build-static-site.py --output-dir _site --cache-dir .refresh-cach
 
 ## Tech stack
 
-Dual Mandate is the first/default Signal Knowledge Graph experiment. Its factor
-circles are sized by fixed macro-model weight, keeping labor prominent even when
-its directional bias is near neutral. Factor colors and visible labels show
-less, neutral, or more hike pressure. Mandate-hub percentages summarize weighted
-signal attention, not decision probabilities; this visualization does not change
-forecast weights or estimate the impact of employment-data revisions.
-
 - **Python** for ingestion/export pipelines
 - **SQLite** for local persistence
 - **HTML/CSS/JavaScript** for the static dashboard
 - **Three.js** for the 3D knowledge graph
 
+The default Dual Mandate graph sizes factors by model weight and colors them by
+policy pressure. Hub percentages show weighted signal attention, not decision
+probabilities; the visualization does not alter forecasts or estimate revision impacts.
+
 ## Meeting evidence in Previous Meeting History (Neo4j Aura)
 
-Each meeting in Previous Meeting History has an expandable **Meeting evidence**
-card. Open it to load that meeting's economic inputs, observation periods,
-estimated availability dates, model biases, and official source links. Each
-signal also has an expandable view of its underlying values. There is no separate
-explorer tab or graph navigation.
+Expandable **Meeting evidence** cards show economic inputs, observation periods,
+estimated availability dates, model biases, and sources for the five-year backtest.
+Other meetings explicitly report unavailable evidence.
 
-Evidence covers meetings in the five-year backtest; other meetings explicitly
-report that evidence is unavailable rather than substituting current data.
-The cards use the same static Neo4j graph export and
-lag-based observation selection as that backtest. Estimated availability dates
-are **not verified original release timestamps**, and values can include later
-revisions. Forecasts are retrospective reconstructions, not archived live
-forecasts. Edges show model provenance, not economic causation. Historical
-market prices, speeches, and individual votes are not included yet.
+Evidence uses the backtest's lag-based selection. Availability dates are **estimates,
+not verified release timestamps**, and values may include revisions. Forecasts
+are retrospective reconstructions, not archived live predictions. Graph edges
+show provenance, not causation; historical market prices, speeches, and individual
+votes are not included.
 
 Install the optional driver:
 
@@ -152,25 +123,20 @@ NEO4J_PASSWORD=YOUR_PASSWORD
 NEO4J_DATABASE=YOUR_DATABASE_NAME
 ```
 
-Use the actual database name from Aura; it is not necessarily `neo4j`. Environment
-variables override values in the file. Never put credentials in dashboard
-JavaScript or commit the credentials file.
+Use Aura's actual database name, not necessarily `neo4j`. Environment variables
+override the file. Never commit credentials or put them in browser JavaScript.
 
 ```powershell
 python scripts\build-static-site.py --output-dir _site --neo4j-env-file .env.neo4j
 ```
 
-The build writes project-scoped `WTFMeetingEvidence` nodes and typed relationships
-to Aura, then queries and verifies the complete graph before exporting
-`data/meeting_evidence_data.js`. A content hash identifies each immutable
-snapshot; identical imports are idempotent. Different source-data snapshots are
-retained, so storage grows with changed imports. Nothing deletes or changes
-other database labels. The Neo4j account needs read/write and constraint-creation
-permissions for the initial setup.
+The build imports project-scoped `WTFMeetingEvidence` nodes and relationships,
+verifies the graph, and exports `data/meeting_evidence_data.js`. Content-hashed
+snapshots are immutable; identical imports are idempotent, while changed snapshots
+increase storage. Other database labels are untouched. Initial setup requires
+read/write and constraint-creation permissions.
 
-Nodes also carry typed labels such as `WTFMeeting`, `WTFReconstruction`,
-`WTFSignal`, `WTFObservation`, and `WTFSource`. To inspect a meeting in Aura's
-graph interface, substitute a date from the dashboard and run:
+To inspect a meeting in Aura, substitute its date:
 
 ```cypher
 MATCH path = (m:WTFMeeting {meeting_date: '2026-09-16'})-[*1..4]->(e)
@@ -178,22 +144,18 @@ RETURN path
 LIMIT 100
 ```
 
-If multiple snapshots exist, filter `m.snapshot_id` using the `snapshot_id`
-in the exported evidence payload to inspect one exact version.
+Filter `m.snapshot_id` by the exported payload's `snapshot_id` for an exact version.
 
-For hosted builds, configure repository Actions secrets named `NEO4J_URI`,
-`NEO4J_USERNAME`, `NEO4J_PASSWORD`, and `NEO4J_DATABASE`. The workflow installs the
-optional driver when `NEO4J_URI` is set. Configured connection/import failures
-stop the build; unconfigured builds explicitly show meeting evidence as unavailable.
-If the backtest has no completed meetings, the build instead publishes an
-explicitly unavailable evidence view and a partial-refresh warning, without attempting
-an Aura import. Enable both `refresh_fed_history` and `refresh_backtest` in a
-manual workflow run to rebuild the full archives. Routine runs can populate
-recent evidence once official statement ranges and complete lagged macro
-histories are available; adding Aura secrets alone does not supply missing data.
-Only public economic evidence and source metadata belong in this graph: its
-export is published on GitHub Pages. The browser never connects to Aura or
-receives credentials.
+For hosted builds, set Actions secrets with the four names above. Setting
+`NEO4J_URI` enables driver installation; connection/import failures stop the build.
+Without configuration or completed backtest meetings, evidence is explicitly
+unavailable (empty backtests also produce a partial-refresh warning).
+
+Aura credentials alone do not supply missing history. Enable `refresh_fed_history`
+and `refresh_backtest` to rebuild archives; evidence requires statement targets
+and complete lagged macro histories. **Only public economic data belongs in the
+graph:** its export is published to Pages. Browsers never connect to Aura or
+receive credentials.
 
 To import/query an already-generated set of payloads:
 

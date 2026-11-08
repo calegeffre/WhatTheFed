@@ -823,8 +823,25 @@
   <main class="page">
     <section class="hero">
       <div class="eyebrow">WhatTheFed</div>
-      <h1>Next Meeting Heat Map</h1>
+      <h1>Fed Heat Map</h1>
       <p id="summary" class="note"></p>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">Data at a glance</div>
+      <p class="note">One policy-pressure scale for every signal: 1 favors lower rates, 3 is balanced, and 5 favors higher rates. Scores are not probabilities; market odds and original economic readings keep their actual units.</p>
+      <div class="pressure-scale" aria-label="Policy-pressure scale from 1 to 5">
+        <span class="heat-cold">1 · Lower</span>
+        <span class="heat-cool">2 · Leans lower</span>
+        <span class="heat-balanced">3 · Balanced</span>
+        <span class="heat-warm">4 · Leans higher</span>
+        <span class="heat-hot">5 · Higher</span>
+      </div>
+      <p class="note">Select a tile for readings and sources. Rectangle sizes organize information, not forecast weights. Policy Context describes the last FOMC statement, not current economic data.</p>
+      <div id="data-treemap" class="data-treemap" aria-label="Economic data grouped by source"></div>
+    </section>
+
+    <section class="section">
       <div class="prediction-grid">
         <div class="prediction-card">
           <div class="eyebrow">What the market says</div>
@@ -844,20 +861,6 @@
         </div>
       </div>
       <div id="sources" class="source-list"></div>
-    </section>
-
-    <section class="section">
-      <div class="eyebrow">Data at a glance</div>
-      <p class="note">One policy-pressure scale for every signal: 1 favors lower rates, 3 is balanced, and 5 favors higher rates. Scores are not probabilities; market odds and original economic readings keep their actual units.</p>
-      <div class="pressure-scale" aria-label="Policy-pressure scale from 1 to 5">
-        <span class="heat-cold">1 · Lower</span>
-        <span class="heat-cool">2 · Leans lower</span>
-        <span class="heat-balanced">3 · Balanced</span>
-        <span class="heat-warm">4 · Leans higher</span>
-        <span class="heat-hot">5 · Higher</span>
-      </div>
-      <p class="note">Select a tile for readings and sources. Rectangle sizes organize information, not forecast weights. Policy Context describes the last FOMC statement, not current economic data.</p>
-      <div id="data-treemap" class="data-treemap" aria-label="Economic data grouped by source"></div>
     </section>
 
     <section class="section">
