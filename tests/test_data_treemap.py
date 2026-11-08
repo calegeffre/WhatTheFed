@@ -28,7 +28,10 @@ def test_treemap_is_loaded_as_a_public_asset_with_an_explained_scale() -> None:
     assert 'id="data-treemap"' in html
     assert 'src="assets/data-treemap.js?' in html
     assert 'id="heat-map"' not in html
-    assert "1 favors lower rates, 3 is balanced, and 5 favors higher rates" in html
+    assert "One policy-pressure scale for every signal" not in html
+    assert "1 · Lower" in html
+    assert "Select a tile for readings and sources. Rectangle sizes organize information, not forecast weights." in html
+    assert "Policy Context describes the last FOMC statement" not in html
     assert "Rectangle sizes organize information, not forecast weights" in html
 
 
@@ -109,7 +112,8 @@ window.__FOMC_DASHBOARD_DATA__ = {
 console.log(JSON.stringify(buildGroups()));
 """)
     assert [group["label"] for group in payload] == [
-        "Market Data", "Inflation", "Labor", "Growth & Fiscal", "Rates & Funding", "Policy Context",
+        "Market Data", "Inflation", "Labor", "Growth & Fiscal", "Rates & Funding",
+        "Policy Context From Last FOMC Statement",
     ]
     assert payload[1]["cards"][0]["readings"][0][1] == "2.5%"
     assert payload[1]["cards"][1]["readings"][0][1] == "5%"

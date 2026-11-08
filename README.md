@@ -33,11 +33,12 @@ Missing or invalid required inputs display `?` with an error, not fallback value
 
 Data at a Glance is a nested treemap grouped into Market Data (Kalshi and
 Polymarket), Inflation, Labor, Growth & Fiscal, Rates & Funding, and Policy
-Context. Scores map model biases linearly to a 1-to-5 pressure scale: 1 favors
-lower rates, 3 is balanced, and 5 favors higher rates. Market scores use
+Context From Last FOMC Statement. Scores map model biases linearly to a 1-to-5
+pressure scale: 1 favors lower rates, 3 is balanced, and 5 favors higher rates. Market scores use
 `P(raise) - P(cut)`; odds and economic readings retain their units. Select a tile
 for dates, readings, and sources. Tile areas are not model weights or odds.
-Policy Context reflects the last FOMC statement, not current economic data.
+The Policy Context From Last FOMC Statement group reflects the last statement,
+not current economic data.
 
 ## Refresh schedule
 

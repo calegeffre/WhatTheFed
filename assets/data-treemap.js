@@ -139,7 +139,7 @@
           reading("SOFR", m(funding).sofr, "%"),
         ]),
       ] },
-      { label: "Policy Context", weight: 12, cards: policyCards },
+      { label: "Policy Context From Last FOMC Statement", weight: 12, cards: policyCards },
     ];
   }
 
