@@ -49,6 +49,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Verify permanent rate history is tracked
+        run: git ls-files --error-unmatch data/fed_rate_history_data.js
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

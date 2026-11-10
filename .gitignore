@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 data/
+!/data/
+/data/*
+!/data/fed_rate_history_data.js
 *.db
 *.sqlite3
 .refresh-cache/

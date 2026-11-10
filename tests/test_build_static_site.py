@@ -465,6 +465,44 @@ def test_build_site_merges_checked_in_rate_history_with_saved_archive(
         fetch_saved.assert_called_once()
 
 
+def test_clean_checkout_publishes_permanent_history_without_cache_or_network(
+    tmp_path: Path,
+) -> None:
+    namespace = _script_namespace()
+    build_site = namespace["build_site"]
+    (tmp_path / "index.html").write_text("<html></html>")
+    source = SCRIPT_PATH.parents[1] / "data" / "fed_rate_history_data.js"
+    archive = namespace["read_payload"](source)
+    assert archive["meetings"][0]["meeting_date"] == "1982-09-24"
+    assert all(namespace["has_valid_target_range"](item) for item in archive["meetings"])
+    namespace["write_payload"](archive, tmp_path / "data" / source.name)
+    fetch_fred = Mock(side_effect=AssertionError("No historical download expected"))
+    fetch_saved = Mock(return_value=None)
+
+    def ingest(**kwargs):
+        _write_source_exports(
+            namespace, kwargs["arguments"], {"fomc_history_data.js": {"2026": []}},
+        )
+
+    with patch.dict(build_site.__globals__, {
+        "REPO_ROOT": tmp_path,
+        "run_ingestion_command": ingest,
+        "fetch_existing_history": Mock(return_value={"snapshots": []}),
+        "fetch_existing_backtest": Mock(return_value={"meetings": []}),
+        "fetch_existing_meetings": fetch_saved,
+        "fetch_history_payload": fetch_fred,
+        "resolve_backtest_payload": Mock(return_value={"meetings": []}),
+    }):
+        build_site(output_dir=tmp_path / "_site")
+
+    result = namespace["read_payload"](tmp_path / "_site/data/fed_rate_history_data.js")
+    assert result["meetings"] == archive["meetings"]
+    assert result["coverage_start"] == "1982-09-24"
+    assert any("2006-01-01" <= item["meeting_date"] < "2007-01-01"
+               for item in result["meetings"])
+    fetch_fred.assert_not_called()
+
+
 @pytest.mark.parametrize("with_archive", [False, True])
 def test_explicit_fed_history_refresh_failure_completes_build(
     tmp_path: Path, with_archive: bool, capsys

@@ -66,8 +66,10 @@ rate archive rather than download timeout-prone FRED history. Saved entries take
 precedence on matching dates, while older checked-in history remains available
 even when the cache or deployed archive only covers recent years. Official
 statement targets extend the archive and independently feed the rate chart;
-unparseable ranges are omitted. Without either archive, coverage begins with
-parsed statements. New or corrected outcomes trigger a backtest refresh.
+unparseable ranges are omitted. The permanent archive is the only file under
+`data/` allowed by `.gitignore`; Pages verifies it is tracked before building.
+Do not remove it or rely on the Actions cache as its replacement. New or
+corrected outcomes trigger a backtest refresh.
 
 To rebuild full history, enable `refresh_fed_history` and `refresh_backtest` in a
 manual run (locally: `--refresh-fed-history --refresh-backtest`). Historical
