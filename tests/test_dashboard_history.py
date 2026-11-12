@@ -135,9 +135,9 @@ function makeNode(scene, x, y, z, color, radius, label, sublabel, hover = true) 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is unavailable")
 @pytest.mark.parametrize("archive_present", [False, True])
 def test_recent_decisions_render_without_fred_and_merge_archive(archive_present: bool) -> None:
-    html = (Path(__file__).resolve().parents[1] / "index.html").read_text()
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
     start = html.index('    const meetingTimeline = document.getElementById("meeting-timeline");')
-    end = html.index("    // ── Data Visualization", start)
+    end = html.index('    const VIZ_NS = ', start)
     meetings = [
         {
             "meeting_date": (date(2022, 1, 1) + timedelta(days=45 * index)).isoformat(),
