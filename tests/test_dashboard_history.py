@@ -196,7 +196,7 @@ console.log(JSON.stringify({
 """
     )
     result = subprocess.run(
-        [shutil.which("node"), "-e", script], check=True, capture_output=True, text=True,
+        [shutil.which("node"), "-e", script], check=True, capture_output=True, text=True, encoding="utf-8",
     )
     payload = json.loads(result.stdout)
     assert len(payload["meetings"]) == 36 + int(archive_present)
